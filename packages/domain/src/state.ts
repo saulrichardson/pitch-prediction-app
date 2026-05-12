@@ -1,14 +1,12 @@
 import type {
   BaseState,
   CountState,
-  ForcedPitchInput,
   GameState,
   LocationBucket,
   PitchEvaluation,
   PitchEvent,
   PitchLocation,
   PitchResult,
-  PitchShape,
   PitchType,
   PredictionResponse,
   RevealLabel,
@@ -70,42 +68,6 @@ export function applyPitchResult(
   return { postState: next, terminalState: null };
 }
 
-export function buildForcedPitch(
-  input: ForcedPitchInput,
-  base: {
-    paId: string;
-    pitchNumber: number;
-    gamePitchIndex: number;
-    preState: GameState;
-    matchup: PitchEvent["matchup"];
-    source: PitchEvent["source"];
-    prediction?: PredictionResponse;
-  }
-): { pitch: PitchEvent; terminalState: TerminalState | null } {
-  const { postState, terminalState } = applyPitchResult(base.preState, input.result);
-  const location = locationFromBucket(input.location);
-  const shape = completePitchShape(input.pitchType, base.prediction);
-
-  return {
-    terminalState,
-    pitch: {
-      id: `${base.source}-${base.gamePitchIndex}-${base.pitchNumber}-${Date.now()}`,
-      paId: base.paId,
-      pitchNumber: base.pitchNumber,
-      gamePitchIndex: base.gamePitchIndex,
-      source: base.source,
-      pitchType: input.pitchType,
-      result: input.result,
-      location,
-      shape,
-      preState: base.preState,
-      postState,
-      matchup: base.matchup,
-      description: `${input.pitchType} ${input.location.toLowerCase()}, ${resultLabel(input.result)}`
-    }
-  };
-}
-
 export function evaluatePitch(
   prediction: PredictionResponse,
   actual: PitchEvent
@@ -138,19 +100,6 @@ export function evaluatePitch(
     velocityErrorMph,
     label: revealLabel(pitchTypeProbability, pitchRank + 1)
   };
-}
-
-export function compareProbabilities(
-  branch: { label: string; probability: number }[],
-  actual: { label: string; probability: number }[]
-): { label: string; probability: number }[] {
-  const labels = new Set([...branch.map((p) => p.label), ...actual.map((p) => p.label)]);
-  return [...labels]
-    .map((label) => ({
-      label,
-      probability: probabilityFor(branch, label) - probabilityFor(actual, label)
-    }))
-    .sort((a, b) => Math.abs(b.probability) - Math.abs(a.probability));
 }
 
 export function locationFromBucket(label: LocationBucket): PitchLocation {
@@ -252,27 +201,6 @@ export function resultLabel(result: PitchResult): string {
 
 export function pitchTypeLabel(type: PitchType): string {
   return type === "Other" ? "Other" : type;
-}
-
-function completePitchShape(pitchType: PitchType, prediction?: PredictionResponse): PitchShape {
-  const possible = prediction?.possiblePitches.find((pitch) => pitch.pitchType === pitchType);
-  const defaultVelocity: Record<PitchType, number> = {
-    FF: 96,
-    SI: 94,
-    SL: 86,
-    CH: 88,
-    CU: 80,
-    FC: 91,
-    FS: 88,
-    Other: 84
-  };
-
-  return {
-    velocity: possible?.velocity ?? defaultVelocity[pitchType],
-    spin: null,
-    release: {},
-    movement: {}
-  };
 }
 
 function advanceForcedRunner(bases: BaseState): BaseState {

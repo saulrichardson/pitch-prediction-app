@@ -1,6 +1,5 @@
 import { normalizeMlbLiveFeed, type GameReplay, type GameSummary } from "@pitch/domain";
 import { getStorage } from "@pitch/db";
-import type { Matchup } from "@pitch/domain";
 
 const metsTeamId = 121;
 const mlbBase = "https://statsapi.mlb.com";
@@ -40,26 +39,6 @@ export async function getGameReplay(gamePk: string): Promise<GameReplay> {
   }
 }
 
-export async function lookupMlbPlayer(name: string, role: "pitcher" | "batter"): Promise<{
-  id: string;
-  name: string;
-  hand: Matchup["pitcherHand"];
-}> {
-  const response = await fetch(`${mlbBase}/api/v1/people/search?names=${encodeURIComponent(name)}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`MLB player lookup failed with ${response.status}.`);
-  const payload = await response.json() as { people?: Array<Record<string, unknown>> };
-  const player = payload.people?.find((candidate) => {
-    const position = stringAt(objectAt(candidate, "primaryPosition"), "type", "");
-    return role === "pitcher" ? position === "Pitcher" : position !== "Pitcher";
-  }) ?? payload.people?.[0];
-  if (!player) throw new Error(`No MLB player found for ${name}.`);
-  return {
-    id: String(valueAt(player, "id") ?? ""),
-    name: stringAt(player, "fullName", name),
-    hand: handCode(objectAt(player, role === "pitcher" ? "pitchHand" : "batSide"))
-  };
-}
-
 function gameSummary(game: Record<string, unknown>): GameSummary {
   const teams = objectAt(game, "teams");
   const away = objectAt(objectAt(teams, "away"), "team");
@@ -78,11 +57,6 @@ function gameSummary(game: Record<string, unknown>): GameSummary {
 
 function statusText(game: Record<string, unknown>): string {
   return stringAt(objectAt(game, "status"), "detailedState", "Unknown");
-}
-
-function handCode(value: Record<string, unknown>): Matchup["pitcherHand"] {
-  const code = stringAt(value, "code", "Unknown");
-  return code === "L" || code === "R" || code === "S" ? code : "Unknown";
 }
 
 function dateOnly(date: Date): string {

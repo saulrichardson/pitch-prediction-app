@@ -8,7 +8,7 @@ export type PitchResult =
   | "ball_in_play"
   | "hit_by_pitch";
 
-export type TimelinePitchSource = "actual" | "alternate" | "generated";
+export type TimelinePitchSource = "actual";
 
 export type TerminalState = "strikeout" | "walk" | "hit_by_pitch" | "ball_in_play";
 
@@ -189,65 +189,23 @@ export type ActualPitchForecast = {
   evaluation: PitchEvaluation;
 };
 
-export type TimelineBranch = {
-  id: string;
-  label: string;
-  startsAtPitchIndex: number;
-  replacementSummary: string;
-  pitches: PitchEvent[];
-  prediction: PredictionResponse;
-  terminalState: TerminalState | null;
-  createdAt: string;
-};
-
-export type ClientTimelineBranch = Omit<TimelineBranch, "replacementSummary"> & {
-  replacementSummary: string;
-};
-
 export type Timeline = {
   id: string;
   workspaceId: string;
-  mode: "real-game" | "manual";
-  game: GameSummary | null;
+  mode: "real-game";
+  game: GameSummary;
   actualPitches: PitchEvent[];
   currentPitchIndex: number;
   actualHistory: PitchEvent[];
   actualForecastHistory: ActualPitchForecast[];
   actualPrediction: PredictionResponse;
   actualRevealed: boolean;
-  activeBranchId: string | null;
-  branches: TimelineBranch[];
-  manualSituation: ManualSituation | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type ClientTimeline = Omit<Timeline, "actualPitches" | "branches"> & {
+export type ClientTimeline = Omit<Timeline, "actualPitches"> & {
   currentPitch: PitchMoment | null;
   nextPitchContext: PitchMoment | null;
   actualPitchCount: number;
-  branches: ClientTimelineBranch[];
-};
-
-export type ManualSituation = {
-  matchup: Matchup;
-  state: GameState;
-  gameDate: string;
-  pitchHistory: PitchEvent[];
-};
-
-export type BranchComparison = {
-  actualTimelineId: string;
-  branchId: string;
-  branchLabel: string;
-  pitchMixDelta: Probability[];
-  resultMixDelta: Probability[];
-  countImpactDelta: Probability[];
-  paForecastDelta: Probability[];
-};
-
-export type ForcedPitchInput = {
-  pitchType: PitchType;
-  location: LocationBucket;
-  result: PitchResult;
 };

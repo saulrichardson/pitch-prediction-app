@@ -48,7 +48,7 @@ The service returns a product-ready prediction response:
 - possible pitch summaries with pitch type, result, location, and probability
 
 The web app treats this response as prediction data, not authority. Domain code
-still decides whether a timeline can reveal, advance, branch, or terminate.
+still decides whether a timeline can reveal, advance, step back, or finish.
 
 ## Failure Behavior
 

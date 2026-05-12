@@ -104,9 +104,6 @@ function serverTimeline(overrides: Partial<Timeline>): Timeline {
     actualForecastHistory: [],
     actualPrediction: prediction(),
     actualRevealed: false,
-    activeBranchId: null,
-    branches: [],
-    manualSituation: null,
     createdAt: "2026-05-10T00:00:00.000Z",
     updatedAt: "2026-05-10T00:00:00.000Z",
     ...overrides

@@ -9,10 +9,10 @@ describe("readJsonObject", () => {
   it("accepts JSON objects", async () => {
     const request = new Request("http://test.local", {
       method: "POST",
-      body: JSON.stringify({ returnToActual: true })
+      body: JSON.stringify({ option: true })
     });
 
-    await expect(readJsonObject(request, { optional: true })).resolves.toEqual({ returnToActual: true });
+    await expect(readJsonObject(request, { optional: true })).resolves.toEqual({ option: true });
   });
 
   it("rejects null and arrays as bad request objects instead of throwing TypeError", async () => {

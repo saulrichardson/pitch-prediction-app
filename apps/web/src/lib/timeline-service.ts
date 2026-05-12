@@ -1,16 +1,9 @@
 import {
   advanceActualTimeline,
-  applyAlternatePitch,
   buildPredictionRequest,
-  compareActiveBranch,
   createActualTimeline,
-  createManualTimeline,
-  generateBranchPitch,
-  returnToActual,
   revealCurrentPitch,
   stepBackActualTimeline,
-  type ForcedPitchInput,
-  type ManualSituation,
   type PredictionContext,
   type Timeline
 } from "@pitch/domain";
@@ -28,17 +21,6 @@ export async function createTimelineFromReplay(workspaceId: string, replayId: st
   });
   await getStorage().saveTimeline(timeline);
   await getStorage().audit({ workspaceId, timelineId: timeline.id, action: "timeline.created", payload: { gamePk: replayId } });
-  return timeline;
-}
-
-export async function createManual(workspaceId: string, manualSituation: ManualSituation) {
-  const timeline = await createManualTimeline({
-    workspaceId,
-    manualSituation,
-    predict: predictionForTimeline
-  });
-  await getStorage().saveTimeline(timeline);
-  await getStorage().audit({ workspaceId, timelineId: timeline.id, action: "manual.created", payload: manualSituation });
   return timeline;
 }
 
@@ -69,37 +51,6 @@ export async function stepBackTimeline(timeline: Timeline) {
   return result;
 }
 
-export async function addAlternatePitch(timeline: Timeline, input: ForcedPitchInput) {
-  const next = await applyAlternatePitch(timeline, input, predictionForTimeline);
-  await getStorage().saveTimeline(next);
-  await getStorage().audit({ workspaceId: timeline.workspaceId, timelineId: timeline.id, action: "branch.alternate_pitch", payload: input });
-  return next;
-}
-
-export async function generatePitch(timeline: Timeline, input?: ForcedPitchInput) {
-  const next = await generateBranchPitch(timeline, predictionForTimeline, input);
-  await getStorage().saveTimeline(next);
-  await getStorage().audit({ workspaceId: timeline.workspaceId, timelineId: timeline.id, action: "branch.generated_pitch", payload: { branchId: next.activeBranchId } });
-  return next;
-}
-
-export async function returnActual(timeline: Timeline) {
-  const previousBranchId = timeline.activeBranchId;
-  const next = returnToActual(timeline);
-  await getStorage().saveTimeline(next);
-  await getStorage().audit({
-    workspaceId: timeline.workspaceId,
-    timelineId: timeline.id,
-    action: "timeline.returned_to_actual",
-    payload: { previousBranchId }
-  });
-  return next;
-}
-
-export function compareTimeline(timeline: Timeline, branchId?: string) {
-  return compareActiveBranch(timeline, branchId);
-}
-
 export async function loadTimeline(id: string, workspaceId: string) {
   const timeline = await getStorage().getTimeline(id, workspaceId);
   if (!timeline) throw notFound("Timeline not found.", "timeline_not_found");
@@ -112,7 +63,7 @@ async function predictionForTimeline(timeline: PredictionContext, history: Timel
   const request = buildPredictionRequest({
     currentPitch,
     history,
-    gameDate: timeline.game?.officialDate ?? timeline.manualSituation?.gameDate ?? new Date().toISOString(),
+    gameDate: timeline.game.officialDate,
     pitchNumber: pitchIndex + 1
   });
   const response = await predictPitch(request);

@@ -5,7 +5,6 @@ import {
   buildPredictionRequest,
   createActualTimeline,
   evaluatePitch,
-  generateBranchPitch,
   locationFromBucket,
   revealCurrentPitch,
   stepBackActualTimeline,
@@ -198,7 +197,7 @@ describe("strike zone estimates", () => {
   });
 });
 
-describe("branch generation", () => {
+describe("actual timeline replay", () => {
   it("records the pre-pitch forecast with actual history when advancing", async () => {
     const pitch: PitchEvent = {
       id: "actual",
@@ -376,104 +375,6 @@ describe("branch generation", () => {
     expect(backToFirstResult.evaluation?.pitchTypeProbability).toBeGreaterThan(0);
   });
 
-  it("records model-generated branch pitches with generated source", async () => {
-    const pitch: PitchEvent = {
-      id: "actual",
-      paId: "pa",
-      pitchNumber: 1,
-      gamePitchIndex: 0,
-      source: "actual",
-      pitchType: "FF",
-      result: "called_strike",
-      location: locationFromBucket("Middle"),
-      shape: { velocity: 95, spin: null, release: {}, movement: {} },
-      preState: state,
-      postState: state,
-      matchup: {
-        pitcherId: "1",
-        pitcherName: "Pitcher",
-        pitcherHand: "R",
-        batterId: "2",
-        batterName: "Batter",
-        batterSide: "R"
-      },
-      description: "Called strike"
-    };
-    const timeline = await createActualTimeline({
-      workspaceId: "workspace",
-      replay: {
-        game: {
-          gamePk: "game",
-          label: "Away @ Home",
-          officialDate: "2026-05-09",
-          awayTeam: "Away",
-          homeTeam: "Home",
-          awayScore: 0,
-          homeScore: 0,
-          status: "Final"
-        },
-        pitches: [pitch]
-      },
-      predict: testPredict
-    });
-    const generated = await generateBranchPitch(timeline, testPredict);
-    const branch = generated.branches[0];
-
-    expect(branch).toBeDefined();
-    expect(branch?.label).toBe("Generated Branch A");
-    expect(branch?.pitches).toHaveLength(1);
-    expect(branch?.pitches[0]?.source).toBe("generated");
-  });
-
-  it("does not continue a terminal branch", async () => {
-    const pitch: PitchEvent = {
-      id: "actual",
-      paId: "pa",
-      pitchNumber: 1,
-      gamePitchIndex: 0,
-      source: "actual",
-      pitchType: "FF",
-      result: "called_strike",
-      location: locationFromBucket("Middle"),
-      shape: { velocity: 95, spin: null, release: {}, movement: {} },
-      preState: state,
-      postState: state,
-      matchup: {
-        pitcherId: "1",
-        pitcherName: "Pitcher",
-        pitcherHand: "R",
-        batterId: "2",
-        batterName: "Batter",
-        batterSide: "R"
-      },
-      description: "Called strike"
-    };
-    const timeline = await createActualTimeline({
-      workspaceId: "workspace",
-      replay: {
-        game: {
-          gamePk: "game",
-          label: "Away @ Home",
-          officialDate: "2026-05-09",
-          awayTeam: "Away",
-          homeTeam: "Home",
-          awayScore: 0,
-          homeScore: 0,
-          status: "Final"
-        },
-        pitches: [pitch]
-      },
-      predict: testPredict
-    });
-    const ended = await generateBranchPitch(timeline, testPredict, {
-      pitchType: "FF",
-      location: "Middle",
-      result: "ball_in_play"
-    });
-
-    expect(ended.branches[0]?.terminalState).toBe("ball_in_play");
-    await expect(generateBranchPitch(ended, testPredict)).rejects.toThrow("has ended");
-  });
 });
 
 function testPitch(overrides: Omit<Partial<PitchEvent>, "matchup"> & { matchup?: Partial<PitchEvent["matchup"]> } = {}): PitchEvent {

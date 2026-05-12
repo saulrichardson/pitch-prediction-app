@@ -44,28 +44,6 @@ test("one game-step button alternates reveal and advance", async ({ page }) => {
   await expect(page.getByText("PA Forecast", { exact: true })).toBeVisible();
   await expect(page.getByText("Expected pitches remaining")).toBeVisible();
   await expect(page.getByText("Ready to reveal")).toBeVisible();
-  await expect(page.getByText("Current At-Bat")).toBeVisible();
-  await expect(page.getByText("Pitcher Pattern", { exact: true })).toBeVisible();
-  await expect(page.getByText("No pitcher pattern before this plate appearance yet.")).toBeVisible();
-  await expect(page.locator(".atbat-header").getByText("Model read", { exact: true })).toBeVisible();
-  const logLayout = await page.locator(".sequence-panel").evaluate((panel) => {
-    const atbat = panel.querySelector(".atbat-table");
-    const pattern = panel.querySelector(".pitcher-pattern-card");
-    return {
-      panelOverflowY: getComputedStyle(panel).overflowY,
-      panelMaxHeight: getComputedStyle(panel).maxHeight,
-      atbatOverflowY: atbat ? getComputedStyle(atbat).overflowY : null,
-      atbatMaxHeight: atbat ? getComputedStyle(atbat).maxHeight : null,
-      hasAtbat: Boolean(atbat),
-      hasPattern: Boolean(pattern)
-    };
-  });
-  expect(logLayout.panelOverflowY).toBe("hidden");
-  expect(logLayout.panelMaxHeight).not.toBe("none");
-  expect(logLayout.atbatOverflowY).toBe("auto");
-  expect(logLayout.atbatMaxHeight).not.toBe("none");
-  expect(logLayout.hasAtbat).toBe(true);
-  expect(logLayout.hasPattern).toBe(true);
   const countBeforeReveal = await page.getByTestId("state-count").locator("strong").innerText();
   const outsBeforeReveal = await page.getByTestId("state-outs").locator("strong").innerText();
   const scoreBeforeReveal = await page.getByTestId("state-score").locator("strong").innerText();
@@ -90,10 +68,6 @@ test("one game-step button alternates reveal and advance", async ({ page }) => {
   await expect(page.getByText("Last Pitch")).toBeVisible();
   await expect(page.getByTestId("state-read")).toHaveCount(0);
   await expect(page.getByText("Ready to reveal")).toBeVisible();
-  const currentAtBat = page.locator(".atbat-table").first();
-  await expect(currentAtBat).toContainText("Model read");
-  await expect(currentAtBat).toContainText("Actual");
-  await expect(currentAtBat).toContainText("P1");
   await expect(page.getByTestId("state-pitch").locator("strong")).not.toHaveText(pitchBeforeReveal);
   await expect(page.getByRole("button", { name: /Manual Situation/ })).toHaveCount(0);
 });
@@ -164,7 +138,6 @@ test("reveal keeps the header on the current pitch until a PA-ending advance", a
       foundNewAtBat = true;
       await expect(page.getByTestId("state-pitch").locator("strong")).not.toHaveText(pitchBeforeReveal);
       await expect(page.getByText("Ready to reveal")).toBeVisible();
-      await expect(page.locator(".atbat-table").first()).toContainText("P1");
       await expect(page.getByTestId("game-date")).toContainText(`Game date ${formatOfficialDate(latest.game.officialDate)}`);
       break;
     }

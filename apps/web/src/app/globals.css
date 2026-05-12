@@ -871,7 +871,7 @@ button {
 
 .possible-pitch-header span,
 .possible-pitch-note,
-.scenario-main small {
+.pitch-candidate-main small {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
@@ -898,7 +898,7 @@ button {
   padding: 0.65rem;
 }
 
-.scenario-rank {
+.pitch-candidate-rank {
   display: grid;
   place-items: center;
   width: 1.55rem;
@@ -912,20 +912,20 @@ button {
   line-height: 1;
 }
 
-.scenario-main {
+.pitch-candidate-main {
   display: grid;
   min-width: 0;
   gap: 0.14rem;
 }
 
-.scenario-main strong {
+.pitch-candidate-main strong {
   min-width: 0;
   color: var(--text-strong);
   font-weight: 900;
   line-height: 1.1;
 }
 
-.scenario-main > span {
+.pitch-candidate-main > span {
   min-width: 0;
   color: var(--muted);
   font-size: 0.82rem;
@@ -933,7 +933,7 @@ button {
   line-height: 1.25;
 }
 
-.scenario-support {
+.pitch-candidate-support {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -943,19 +943,19 @@ button {
   border-top: 1px solid rgba(244, 241, 232, 0.08);
 }
 
-.scenario-support div {
+.pitch-candidate-support div {
   display: grid;
   gap: 0.05rem;
 }
 
-.scenario-support dt {
+.pitch-candidate-support dt {
   color: var(--muted);
   font-size: 0.62rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.scenario-support dd {
+.pitch-candidate-support dd {
   margin: 0;
   color: var(--text-strong);
   font-size: 0.82rem;

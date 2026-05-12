@@ -17,9 +17,9 @@ load latest Mets game
   -> advance to the next pre-pitch read
 ```
 
-Counterfactual branch/scenario analysis and manual situation entry may still
-exist in older backend code, but they are not the main product surface for this
-demo.
+Counterfactual branch/scenario analysis and manual situation entry are not part
+of the active v1 web/API surface. The repo keeps the demo focused on the
+real-game replay loop.
 
 ## What The App Does
 
@@ -38,8 +38,8 @@ For each pitch, the cockpit shows:
 - the model's most likely pitch type and probability
 - likely location, likely result, expected velocity, count impact, and plate
   appearance outlook
-- a compact current-at-bat pitch log
-- recent pitcher-pattern context when enough history exists
+- model detail distributions for pitch mix, location, result, count impact,
+  and plate appearance outlook
 
 When the user clicks **Reveal Actual**, the app shows the real pitch that was
 thrown and scores it against the model's pre-pitch read. The comparison includes
@@ -103,7 +103,9 @@ the model read was made before the actual pitch was exposed.
 
 Use this map when you want to understand or change a specific part of the app:
 
-- `apps/web/src/components/pitch-sequence-lab.tsx`: the replay cockpit UI.
+- `apps/web/src/components/pitch-sequence-lab.tsx`: the replay cockpit stateful container.
+- `apps/web/src/components/pitch-sequence-lab/`: focused cockpit panels,
+  formatters, API helpers, strike-zone rendering, and matchup/state summaries.
 - `apps/web/src/app/api/`: the server routes used by the browser.
 - `apps/web/src/lib/mlb-service.ts`: fetching MLB schedule and replay data.
 - `apps/web/src/lib/model-service.ts`: the web app's model-service adapter.
@@ -111,14 +113,14 @@ Use this map when you want to understand or change a specific part of the app:
 - `apps/web/src/lib/timeline-dto.ts`: browser-safe timeline shaping and
   redaction.
 - `packages/domain/src/mlb.ts`: MLB feed normalization.
-- `packages/domain/src/timeline.ts`: replay timeline creation, reveal, advance,
-  and branch-era domain logic.
+- `packages/domain/src/timeline.ts`: replay timeline creation, reveal,
+  advance, and back-step domain logic.
 - `packages/domain/src/state.ts`: baseball state helpers, scoring, and strike
   zone helpers.
 - `services/model-api/`: the FastAPI service that wraps the pitch prediction
   model, plus the Lambda handler used by the AWS demo.
 - `packages/db/`: DynamoDB storage for the deployed app, local memory storage,
-  and legacy PostgreSQL storage adapters.
+  and legacy PostgreSQL storage adapters split by adapter.
 - `infra/`: CloudFront, Lambda Web Adapter, model Lambda integration, DynamoDB,
   Secrets Manager, ECR, and CDK deployment definitions.
 - `scripts/verify-product-flows.mjs`: product-flow verification against a

@@ -13,7 +13,7 @@ boundary.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `fetchMlbGameReplay` | Load public MLB game data for replay | game id | normalized `GameReplay` plus optional raw payload | server API | public read only | no | external MLB API read | game id | app-configured HTTP timeout | none currently | failed, unavailable, malformed |
 | `requestPitchPrediction` | Ask model service for a next-pitch prediction | `PredictionRequest` | `PredictionResponse` | server API | server-side model authority present | no | model service HTTP call or Lambda invoke | prediction request context | app-configured model timeout | `prediction_runs` on success when durable storage is enabled | failed, unavailable, malformed, unauthorized |
-| `persistTimeline` | Save timeline state and branch records | `Timeline` | saved `Timeline` | server API | workspace scoped | no | DynamoDB, PostgreSQL, or local memory write | timeline id | storage timeout | timeline audit event from caller | failed |
+| `persistTimeline` | Save replay timeline state | `Timeline` | saved `Timeline` | server API | workspace scoped | no | DynamoDB, PostgreSQL, or local memory write | timeline id | storage timeout | timeline audit event from caller | failed |
 | `recordAuditEvent` | Record important timeline behavior | audit event input | stored audit row or memory entry | server API | workspace scoped when present | no | DynamoDB, PostgreSQL, or local memory write | audit event id | storage timeout | event action name | failed |
 
 ## Required Capability Fields

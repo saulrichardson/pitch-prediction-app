@@ -15,45 +15,41 @@ States:
 
 - `actual_hidden`: current actual pitch is not revealed; prediction is visible
 - `actual_revealed`: current actual pitch and evaluation are visible
-- `branch_active`: an alternate or generated branch is selected
-- `terminal_branch`: active branch ended in strikeout, walk, hit by pitch, or
-  ball in play
+- `completed`: final actual pitch has been revealed and committed to history
 
 Events:
 
 - `RevealActual`
 - `AdvanceActual`
-- `ApplyAlternatePitch`
-- `GeneratePitch`
-- `CompareBranch`
-- `ReturnToActual`
+- `StepBackActual`
 
 Rules:
 
+- `RevealActual` is valid only when the current pitch exists and actual fields
+  are hidden from the browser.
 - `AdvanceActual` is valid only after `RevealActual`.
-- Branch events must append to branch history and must not mutate the actual
-  timeline trunk.
-- Model predictions are recomputed after actual advance and after each
-  non-terminal branch pitch.
-- Terminal branch states do not request another prediction until the user
-  returns to actual or starts another branch.
+- `AdvanceActual` commits the revealed pitch and its pre-pitch forecast to
+  actual history before requesting the next prediction.
+- Repeated `AdvanceActual` at the final pitch is idempotent for history and
+  forecast records.
+- `StepBackActual` from `actual_revealed` hides the current actual pitch again.
+- `StepBackActual` from `actual_hidden` returns to the previous revealed pitch.
 
 Terminal states:
 
-- branch-level terminal states are `strikeout`, `walk`, `hit_by_pitch`, and
-  `ball_in_play`.
+- The timeline is completed when the final actual pitch has been revealed and
+  committed to history.
 
 Audit events:
 
 - `timeline.created`
 - `timeline.revealed`
 - `timeline.advanced`
-- `branch.alternate_pitch`
-- `branch.generated_pitch`
+- `timeline.stepped_back`
 
 Verification:
 
-- valid reveal and advance transitions are covered by domain tests
+- valid reveal, advance, final advance, and back-step transitions are covered
+  by domain tests
 - advancing before reveal is rejected
-- branch pitches append to branch history and do not mutate the actual trunk
-- terminal branch states do not request another prediction
+- unrevealed actual pitch fields are redacted from browser DTOs

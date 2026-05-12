@@ -105,6 +105,7 @@ export const timelines = pgTable(
 );
 
 export const branchPitchEvents = pgTable(
+  // Legacy SQL durable-mode table retained until a deliberate drop migration is approved.
   "branch_pitch_events",
   {
     id: text("id").primaryKey(),
@@ -119,6 +120,7 @@ export const branchPitchEvents = pgTable(
 );
 
 export const manualSituations = pgTable(
+  // Legacy SQL durable-mode table retained until a deliberate drop migration is approved.
   "manual_situations",
   {
     id: text("id").primaryKey(),

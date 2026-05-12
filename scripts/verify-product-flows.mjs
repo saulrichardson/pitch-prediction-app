@@ -144,10 +144,6 @@ await step("optional JSON routes reject null bodies without 500s", async () => {
   const advanceNull = await client.request(`/api/timelines/${timeline.id}/advance`, { method: "POST", body: null });
   assert(advanceNull.response.status === 400, "advance null body should be a 400", advanceNull.payload);
   assert(advanceNull.payload.code === "invalid_json_object", "advance null body should use a stable error code", advanceNull.payload);
-
-  const generateNull = await client.request(`/api/timelines/${timeline.id}/generate`, { method: "POST", body: null });
-  assert(generateNull.response.status === 400, "generate null body should be a 400", generateNull.payload);
-  assert(generateNull.payload.code === "invalid_json_object", "generate null body should use a stable error code", generateNull.payload);
 });
 
 await step("reveal actual scores the pitch against the stored prediction", async () => {
@@ -172,36 +168,8 @@ await step("next pitch advances actual history and recomputes prediction", async
   assert(timeline.currentPitchIndex === 1, "timeline should advance to pitch two", timeline);
   assert(timeline.actualHistory.length === 1, "actual history should include revealed previous pitch", timeline);
   assert(timeline.actualRevealed === false, "next actual pitch should be hidden", timeline);
-  assert(timeline.activeBranchId === null, "actual advance should keep user on trunk", timeline);
   assert(timeline.actualPrediction?.id, "next prediction should be present", timeline.actualPrediction);
   return `pitchIndex=${timeline.currentPitchIndex}`;
-});
-
-await step("manual situation uses the same next-pitch prediction path", async () => {
-  const manual = await client.request("/api/manual-situations", {
-    method: "POST",
-    body: {
-      pitcherName: "Kodai Senga",
-      batterName: "Ketel Marte",
-      balls: 3,
-      strikes: 2,
-      outs: 1,
-      inning: 7,
-      awayScore: 2,
-      homeScore: 1,
-      firstBase: true,
-      secondBase: false,
-      thirdBase: false
-    }
-  });
-  assert(manual.response.ok, "manual situation should be created", manual.payload);
-  const manualTimeline = manual.payload.timeline;
-  assert(manualTimeline.mode === "manual", "manual timeline should be manual mode", manualTimeline);
-  assert(manualTimeline.manualSituation.state.count.balls === 3, "manual count should be preserved", manualTimeline.manualSituation);
-  assert(manualTimeline.actualPrediction.pitchMix.length > 0, "manual situation should have prediction", manualTimeline.actualPrediction);
-  assert(manualTimeline.actualPrediction.location.expected.label, "manual situation should include likely location", manualTimeline.actualPrediction);
-  assert(manualTimeline.activeBranchId === null, "manual prediction should not activate a scenario branch", manualTimeline);
-  return `manual=${manualTimeline.manualSituation.matchup.pitcherName} vs ${manualTimeline.manualSituation.matchup.batterName}`;
 });
 
 await step("timeline access is scoped to the anonymous workspace", async () => {

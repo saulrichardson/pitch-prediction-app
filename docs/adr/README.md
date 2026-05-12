@@ -36,3 +36,5 @@ Use `docs/templates/adr.md` as the starting point.
   shared-password barrier and requires real model predictions.
 - `0008-adopt-serverless-web-architecture.md`: selects the
   CloudFront/Lambda Web Adapter/DynamoDB deployment for this serverless repo.
+- `0009-remove-archived-scenario-api-surface.md`: removes branch/manual
+  scenario behavior from the active v1 web/API/domain surface.

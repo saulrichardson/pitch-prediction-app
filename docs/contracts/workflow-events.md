@@ -28,8 +28,7 @@ events:
 - `timeline.created`
 - `timeline.revealed`
 - `timeline.advanced`
-- `branch.alternate_pitch`
-- `branch.generated_pitch`
+- `timeline.stepped_back`
 
 See `docs/contracts/telemetry-events.md`.
 

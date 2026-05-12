@@ -1,10 +1,8 @@
 import type {
   ClientTimeline,
-  ClientTimelineBranch,
   PitchEvent,
   PitchMoment,
-  Timeline,
-  TimelineBranch
+  Timeline
 } from "@pitch/domain";
 
 export type ReplaySummaryDto = {
@@ -13,7 +11,7 @@ export type ReplaySummaryDto = {
 };
 
 export function toClientTimeline(timeline: Timeline): ClientTimeline {
-  const { actualPitches, branches, ...rest } = timeline;
+  const { actualPitches, ...rest } = timeline;
   const currentPitch = actualPitches[timeline.currentPitchIndex] ?? null;
   const nextPitch = timeline.actualRevealed ? actualPitches[timeline.currentPitchIndex + 1] ?? null : null;
 
@@ -21,8 +19,7 @@ export function toClientTimeline(timeline: Timeline): ClientTimeline {
     ...rest,
     currentPitch: currentPitch ? toPitchMoment(currentPitch) : null,
     nextPitchContext: nextPitch ? toPitchMoment(nextPitch) : null,
-    actualPitchCount: actualPitches.length,
-    branches: branches.map(toClientBranch)
+    actualPitchCount: actualPitches.length
   };
 }
 
@@ -42,12 +39,5 @@ function toPitchMoment(pitch: PitchEvent): PitchMoment {
     source: pitch.source,
     preState: pitch.preState,
     matchup: pitch.matchup
-  };
-}
-
-function toClientBranch(branch: TimelineBranch): ClientTimelineBranch {
-  return {
-    ...branch,
-    replacementSummary: branch.label
   };
 }

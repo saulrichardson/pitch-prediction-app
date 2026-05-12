@@ -19,10 +19,9 @@ work.
   live, sees what the model expected before each actual pitch, then uses one
   primary game-step button to reveal what happened and advance to the next
   prediction.
-- Counterfactual branching remains an archived backend capability for future
-  scenario analysis, but it is not the primary product surface.
-- Manual current-situation setup is also archived outside the primary cockpit.
-  The first product surface should not ask managers to enter game state by hand.
+- Counterfactual branching and manual current-situation setup are outside the
+  active v1 web/API surface. The first product surface should not ask managers
+  to enter game state by hand or manage generated branches.
 - The first demo defaults to the latest Mets game available from public MLB
   data.
 
@@ -97,8 +96,8 @@ What are the most important end-to-end workflows?
 - Model readiness: make real-model-ready and unavailable states clear. The
   product should not provide substitute predictions when the real model is not
   working.
-- Archived scenario analysis: the branch/timeline APIs may support future
-  counterfactual modules, but they should not crowd the in-game prediction UI.
+- Scenario analysis may return later as a separate module, but it should not
+  crowd the in-game prediction UI or leak into the v1 replay API surface.
 
 ## Boundaries And Non-Goals
 

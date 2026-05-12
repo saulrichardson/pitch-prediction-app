@@ -4,6 +4,11 @@
 - date: 2026-05-10
 - owners: project maintainers
 
+Superseded in part by
+`0009-remove-archived-scenario-api-surface.md`, which removes branch/manual
+behavior from the active web/API/domain surface instead of retaining it as
+archived code.
+
 ## Context
 
 The initial product surface combined two related but different jobs:
@@ -32,15 +37,15 @@ The primary UI should emphasize:
 - likely location
 - actual reveal and model-vs-actual scoring
 - one primary game-step control that alternates between reveal and advance
-- manual current situation prediction
 
 Remove counterfactual branch controls, generated pitch cards, branch comparison,
 and branch path management from the default cockpit.
 
-Keep existing branch/domain/API code as archived internal capability for now.
-Do not present it as required v1 product behavior. If counterfactual analysis is
+This ADR originally kept existing branch/domain/API code as archived internal
+capability. ADR 0009 supersedes that portion by removing branch/manual behavior
+from the active v1 web/API/domain surface. If counterfactual analysis is
 revived, build it as a separate Scenario Lab module with its own information
-hierarchy and tests.
+hierarchy, API contracts, persistence plan, and tests.
 
 ## Rationale
 
@@ -76,18 +81,15 @@ predict before pitch
 click game-step button to reveal actual
 score model
 click same button to advance
-manual predict
 ```
 
-Branch-related persistence and API routes remain in the codebase, but they are
-not part of the primary UI acceptance path. Future work should either remove
-them or promote them into a separate scenario module with dedicated product
-language, docs, and tests.
+Branch-related behavior is no longer part of the primary UI acceptance path.
+Future work should introduce it only through a separate scenario module with
+dedicated product language, docs, contracts, and tests.
 
 ## Verification
 
-- product-flow verification focuses on replay reveal/advance and manual
-  prediction
+- product-flow verification focuses on replay reveal/advance
 - UI smoke tests verify the protected cockpit entry flow and next-pitch
   positioning
 - typecheck, lint, unit tests, build, and Playwright smoke test remain required

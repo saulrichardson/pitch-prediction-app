@@ -31,9 +31,7 @@ of truth for current implementation choices.
 ## Tenant Model
 
 - tenant boundary: anonymous workspace/session cookie
-- ownership model: replay/manual timelines are scoped to the workspace cookie;
-  archived scenario/branch records remain workspace-scoped if used by future
-  modules
+- ownership model: replay timelines are scoped to the workspace cookie
 - cross-tenant access rule: no workspace may read another workspace's timelines
 
 ## Data Sensitivity
@@ -148,7 +146,7 @@ record it here briefly and add an ADR under `docs/adr/`.
 | AWS CloudFront | web entry point | browser HTTP requests | routes to Lambda Function URL | project |
 | AWS Lambda | model inference and serverless web hosting | web/model containers and prediction requests | serves web app and invokes model runtime | project |
 | AWS DynamoDB | serverless app state | games, timelines, predictions, audit events | pay-per-request data writes | project |
-| PostgreSQL durable mode | optional durable app data store | games, timelines, branches, predictions | database writes when enabled | project |
+| PostgreSQL durable mode | optional durable app data store | games, timelines, predictions, audit events | database writes when enabled | project |
 | AWS Secrets Manager | runtime secrets | session/model/db secrets | secret reads | project |
 
 ## Irreversible Actions
@@ -160,8 +158,6 @@ record it here briefly and add an ADR under `docs/adr/`.
 ## Critical Invariants
 
 - Actual replay must not reveal actual pitch fields before `Reveal Actual`.
-- Archived scenario state, if used by a future module, must be derived from
-  scenario history and must not mutate the actual game trunk.
 - Timeline API routes must scope reads and writes to the signed anonymous
   workspace session.
 - Model output is prediction data, not authority over state transitions.
