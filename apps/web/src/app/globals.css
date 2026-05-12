@@ -418,9 +418,9 @@ button {
 
 .intro-copy h1 {
   color: var(--text-strong);
-  font-size: 5.8rem;
+  font-size: 4.5rem;
   font-weight: 900;
-  line-height: 0.88;
+  line-height: 0.92;
   text-wrap: balance;
 }
 
@@ -441,14 +441,6 @@ button {
 
 .intro-kicker a:hover {
   color: var(--gold);
-}
-
-.intro-lede {
-  max-width: 690px;
-  color: var(--text);
-  font-size: 1.24rem;
-  font-weight: 780;
-  line-height: 1.36;
 }
 
 .intro-actions {
@@ -1374,7 +1366,7 @@ button {
   }
 
   .intro-copy h1 {
-    font-size: 3.4rem;
+    font-size: 2.8rem;
   }
 
   .intro-facts,

@@ -4,7 +4,7 @@ import type { GameSummary } from "@pitch/domain";
 test("reaches the next-pitch cockpit entry flow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Predict the next pitch. Reveal the result." })).toBeVisible();
-  await expect(page.getByText(/Start a real Mets replay/i)).toBeVisible();
+  await expect(page.getByText(/Start a real Mets replay/i)).toHaveCount(0);
   await expect(page.getByText("Reads")).toBeVisible();
   await expect(page.getByText("Shows")).toBeVisible();
   await expect(page.getByText("Scores")).toBeVisible();

@@ -28,10 +28,6 @@ export function IntroScreen({
             </a>
           </p>
           <h1 id="intro-title" className="display">Predict the next pitch. Reveal the result.</h1>
-          <p className="intro-lede">
-            Start a real Mets replay. Before each pitch appears, the app records the model read; after reveal,
-            it scores what actually happened and advances the game state.
-          </p>
           <div className="intro-actions">
             <button className="btn btn-primary intro-enter" disabled={isLoading || !isHydrated} onClick={onEnter}>
               {isLoading ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
