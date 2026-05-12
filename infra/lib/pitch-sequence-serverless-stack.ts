@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
@@ -20,6 +21,12 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const webReservedConcurrency = process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY
       ? Number(process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY)
       : undefined;
+    const customDomainName = process.env.CUSTOM_DOMAIN_NAME;
+    const certificateArn = process.env.ACM_CERTIFICATE_ARN;
+
+    if ((customDomainName && !certificateArn) || (!customDomainName && certificateArn)) {
+      throw new Error("CUSTOM_DOMAIN_NAME and ACM_CERTIFICATE_ARN must be configured together.");
+    }
 
     const repository = ecr.Repository.fromRepositoryName(this, "Repository", repositoryName);
     const modelFunction = lambda.Function.fromFunctionName(this, "ModelFunction", modelFunctionName);
@@ -76,6 +83,10 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE
     });
 
+    const certificate = certificateArn
+      ? acm.Certificate.fromCertificateArn(this, "CustomDomainCertificate", certificateArn)
+      : undefined;
+
     const distribution = new cloudfront.Distribution(this, "Distribution", {
       defaultBehavior: {
         origin: new origins.FunctionUrlOrigin(functionUrl, {
@@ -89,6 +100,13 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
       },
+      ...(customDomainName && certificate
+        ? {
+          domainNames: [customDomainName],
+          certificate,
+          minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021
+        }
+        : {}),
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       comment: "Pitch Prediction App serverless web/API distribution"
@@ -97,6 +115,12 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ServerlessWebUrl", {
       value: `https://${distribution.distributionDomainName}`
     });
+
+    if (customDomainName) {
+      new cdk.CfnOutput(this, "CustomDomainUrl", {
+        value: `https://${customDomainName}`
+      });
+    }
 
     new cdk.CfnOutput(this, "ServerlessStateTableName", {
       value: table.tableName

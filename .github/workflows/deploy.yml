@@ -15,6 +15,8 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY_NAME: pitch-prediction-app
   SERVERLESS_WEB_IMAGE_TAG: serverless-${{ github.sha }}
+  CUSTOM_DOMAIN_NAME: baseball.saulrichardson.io
+  ACM_CERTIFICATE_ARN: arn:aws:acm:us-east-1:492205018164:certificate/62136baf-0216-4c9a-acbc-7e6e1694b0f0
 
 jobs:
   deploy:
@@ -38,6 +40,23 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Wait for ACM certificate
+        if: ${{ env.ACM_CERTIFICATE_ARN != '' }}
+        run: |
+          for i in $(seq 1 60); do
+            status="$(aws acm describe-certificate \
+              --region us-east-1 \
+              --certificate-arn "$ACM_CERTIFICATE_ARN" \
+              --query "Certificate.Status" \
+              --output text)"
+            echo "ACM certificate status: $status"
+            if [ "$status" = "ISSUED" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "ACM certificate was not issued in time. Confirm the Cloudflare DNS validation CNAME exists." >&2
+          exit 1
       - name: Ensure ECR repository and lifecycle
         run: |
           aws ecr describe-repositories --repository-names "$ECR_REPOSITORY_NAME" >/dev/null 2>&1 \

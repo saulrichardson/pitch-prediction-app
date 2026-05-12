@@ -71,6 +71,15 @@ IAM-scoped model Lambda. The deployed path avoids standing web compute,
 database, VPC, and NAT gateway cost while keeping state durable enough for
 shareable demo sessions.
 
+The intended stable demo URL is:
+
+```text
+https://baseball.saulrichardson.io
+```
+
+The generated CloudFront URL remains available as a fallback while DNS and
+certificate changes propagate.
+
 ## How It Works
 
 The app has three important boundaries:
@@ -133,6 +142,8 @@ Start here:
   simulator.
 - `docs/architecture/system-map.md`: how user intent moves through UI, API,
   domain rules, model calls, persistence, and side effects.
+- `docs/deployment/custom-domain.md`: CloudFront and Cloudflare DNS details for
+  `baseball.saulrichardson.io`.
 - `docs/contracts/model-service.md`: what the model service may return, how
   failures should behave, and what the browser must never see.
 - `docs/contracts/state-machines.md`: lifecycle expectations for reveal,
