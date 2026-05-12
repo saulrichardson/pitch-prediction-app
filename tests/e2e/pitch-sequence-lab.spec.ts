@@ -3,13 +3,20 @@ import type { GameSummary } from "@pitch/domain";
 
 test("reaches the next-pitch cockpit entry flow", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "In-game next-pitch predictor." })).toBeVisible();
-  await expect(page.getByText(/Replay a real MLB game one pitch at a time/i)).toBeVisible();
-  await expect(page.getByText("Pre-pitch forecast")).toBeVisible();
-  await expect(page.getByText("Reveal actual")).toBeVisible();
-  await expect(page.getByText("Advance game state")).toBeVisible();
-  await expect(page.getByText(/View the pitchpredict-xlstm model/i)).toBeVisible();
-  await expect(page.getByText("Read the forecast")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Predict the next pitch. Reveal the result." })).toBeVisible();
+  await expect(page.getByText(/Start a real Mets replay/i)).toBeVisible();
+  await expect(page.getByText("Reads")).toBeVisible();
+  await expect(page.getByText("Shows")).toBeVisible();
+  await expect(page.getByText("Scores")).toBeVisible();
+  await expect(page.getByRole("link", { name: /GitHub Repository/i })).toHaveAttribute(
+    "href",
+    "https://github.com/saulrichardson/pitch-prediction-app-serverless"
+  );
+  await expect(page.getByText(/Model card/i)).toBeVisible();
+  await expect(page.getByText("Forecast is locked before reveal.")).toBeVisible();
+  await expect(page.getByText("Actual pitch is compared to the read.")).toBeVisible();
+  await expect(page.getByText("Game context updates for the next pitch.")).toBeVisible();
+  await expect(page.getByText("One loop, pitch by pitch.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Start Mets Replay/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Manual Situation/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Try Alternate Pitch/ })).toHaveCount(0);
@@ -107,7 +114,7 @@ test("back button undoes reveal and advance steps", async ({ page }) => {
 test("reveal keeps the header on the current pitch until a PA-ending advance", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "In-game next-pitch predictor." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Predict the next pitch. Reveal the result." })).toBeVisible();
   const latest = await latestMetsGame(page);
 
   await page.getByRole("button", { name: /Start Mets Replay/ }).click();

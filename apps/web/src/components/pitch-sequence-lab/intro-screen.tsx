@@ -1,4 +1,4 @@
-import { Loader2, Play } from "lucide-react";
+import { ArrowRight, Github, Loader2, Play, Radar, RotateCcw, ScanSearch } from "lucide-react";
 
 export function IntroScreen({
   error,
@@ -15,60 +15,97 @@ export function IntroScreen({
 }) {
   return (
     <section className="intro-board">
-      <div className="intro-hero">
+      <div className="intro-hero" aria-labelledby="intro-title">
         <div className="intro-copy">
-          <p className="small-label">Pitch Prediction App</p>
-          <h1 className="display">In-game next-pitch predictor.</h1>
+          <p className="small-label intro-kicker">
+            <a
+              href="https://github.com/saulrichardson/pitch-prediction-app-serverless"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Github size={13} />
+              GitHub Repository
+            </a>
+          </p>
+          <h1 id="intro-title" className="display">Predict the next pitch. Reveal the result.</h1>
           <p className="intro-lede">
-            Replay a real MLB game one pitch at a time. Before each pitch is shown, the model reads the pitcher,
-            batter, count, base state, score, inning, and previous pitch sequence.
+            Start a real Mets replay. Before each pitch appears, the app records the model read; after reveal,
+            it scores what actually happened and advances the game state.
           </p>
-          <div className="intro-rail" aria-label="Replay flow">
-            <span>Pre-pitch forecast</span>
-            <span>Reveal actual</span>
-            <span>Advance game state</span>
+          <div className="intro-actions">
+            <button className="btn btn-primary intro-enter" disabled={isLoading || !isHydrated} onClick={onEnter}>
+              {isLoading ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
+              {isLoading ? loadingMessage ?? "Loading game" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
+            </button>
+            <a href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm" target="_blank" rel="noreferrer">
+              Model card <ArrowRight size={15} />
+            </a>
           </div>
-        </div>
-        <div className="intro-command">
-          <p className="small-label">Start here</p>
-          <strong>Latest Mets game</strong>
-          <span>Loads the latest available Mets replay and lands on Pitch 1 with the model forecast already on screen.</span>
-          <button className="btn btn-primary intro-enter" disabled={isLoading || !isHydrated} onClick={onEnter}>
-            {isLoading ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
-            {isLoading ? loadingMessage ?? "Loading game" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
-          </button>
           {error ? <p className="intro-error">{error}</p> : null}
+          <dl className="intro-facts" aria-label="Replay inputs and outputs">
+            <div>
+              <dt>Reads</dt>
+              <dd>Pitcher, batter, count, bases, inning, score, sequence</dd>
+            </div>
+            <div>
+              <dt>Shows</dt>
+              <dd>Pitch mix, target location, result odds, next-count pressure</dd>
+            </div>
+            <div>
+              <dt>Scores</dt>
+              <dd>Actual pitch type, miss distance, result fit, state change</dd>
+            </div>
+          </dl>
         </div>
-      </div>
-      <div className="intro-walkthrough panel">
-        <div className="intro-walkthrough-copy">
-          <p className="small-label">What we built</p>
-          <h2 className="display">A live-feeling replay cockpit for model reads.</h2>
-          <p>
-            The app loads public MLB game data, records the model forecast before each pitch, then lets you reveal
-            the actual pitch and advance the real game state. It is built around the question a manager cares about:
-            what is most likely next from this pitcher, batter, count, and sequence?
-          </p>
-          <a href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm" target="_blank" rel="noreferrer">
-            View the pitchpredict-xlstm model
-          </a>
-        </div>
-        <div className="intro-steps" aria-label="How to use the simulator">
-          <div>
-            <span>01</span>
-            <strong>Read the forecast</strong>
-            <p>Start with the likely pitch type, location, result, and next-count pressure before the actual pitch appears.</p>
+
+        <div className="intro-preview" aria-label="Replay walkthrough preview">
+          <div className="preview-scoreboard">
+            <span>NYM @ ARI</span>
+            <strong>Pitch 1</strong>
+            <span>Top 1 · 0-0 · 0 outs</span>
           </div>
-          <div>
-            <span>02</span>
-            <strong>Reveal the pitch</strong>
-            <p>Compare the forecast against pitch type, velocity, location miss, result probability, and count change.</p>
+          <div className="preview-main">
+            <div className="preview-readout">
+              <span className="small-label">Model Read</span>
+              <strong className="display">Sinker</strong>
+              <dl>
+                <div><dt>Pitch</dt><dd>34%</dd></div>
+                <div><dt>Zone</dt><dd>Low arm-side</dd></div>
+                <div><dt>Result</dt><dd>Ground ball</dd></div>
+              </dl>
+            </div>
+            <div className="preview-zone" aria-hidden="true">
+              <span className="preview-zone-frame" />
+              <svg className="preview-zone-line" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+                <line x1="55" y1="44" x2="63" y2="54" />
+              </svg>
+              <span className="preview-zone-dot forecast" />
+              <span className="preview-zone-dot actual" />
+            </div>
           </div>
-          <div>
-            <span>03</span>
-            <strong>Advance the game</strong>
-            <p>The actual pitch becomes history, the count and matchup update, and the next model read is computed.</p>
-          </div>
+          <ol className="preview-loop">
+            <li>
+              <ScanSearch size={18} />
+              <div>
+                <strong>Read</strong>
+                <span>Forecast is locked before reveal.</span>
+              </div>
+            </li>
+            <li>
+              <Radar size={18} />
+              <div>
+                <strong>Reveal</strong>
+                <span>Actual pitch is compared to the read.</span>
+              </div>
+            </li>
+            <li>
+              <RotateCcw size={18} />
+              <div>
+                <strong>Advance</strong>
+                <span>Game context updates for the next pitch.</span>
+              </div>
+            </li>
+          </ol>
         </div>
       </div>
     </section>
