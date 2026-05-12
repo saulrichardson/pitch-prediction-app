@@ -1,0 +1,6 @@
+{
+  "app": "npx tsx bin/pitch-infra.ts",
+  "context": {
+    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true
+  }
+}

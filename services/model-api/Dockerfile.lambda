@@ -1,0 +1,41 @@
+FROM python:3.13-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV HOME=/tmp
+ENV XDG_CACHE_HOME=/tmp/.cache
+ENV HF_HOME=/tmp/huggingface
+ENV HUGGINGFACE_HUB_CACHE=/tmp/huggingface/hub
+ENV MPLCONFIGDIR=/tmp/matplotlib
+ENV TORCH_HOME=/tmp/torch
+ENV PYBASEBALL_CACHE=/tmp/pybaseball-cache
+ENV PITCHPREDICT_MODEL_DIR=/tmp/pitchpredict-model
+ENV PITCHPREDICT_CACHE_DIR=/tmp/pitchpredict-cache
+ENV PITCHPREDICT_LOG_DIR=/tmp/pitchpredict-logs
+
+WORKDIR /var/task
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.11.0"
+RUN pip install --no-cache-dir \
+  "awslambdaric>=3.1.1" \
+  "fastapi>=0.121.0" \
+  "pitchpredict==0.5.0" \
+  "pydantic>=2.12.0"
+
+COPY src ./src
+
+RUN useradd --create-home --uid 10001 appuser \
+  && mkdir -p /tmp/.cache /tmp/huggingface/hub /tmp/matplotlib /tmp/torch /tmp/pybaseball-cache /tmp/pitchpredict-model /tmp/pitchpredict-cache /tmp/pitchpredict-logs \
+  && chown -R appuser:appuser /tmp/.cache /tmp/huggingface /tmp/matplotlib /tmp/torch /tmp/pybaseball-cache /tmp/pitchpredict-model /tmp/pitchpredict-cache /tmp/pitchpredict-logs /var/task
+
+USER appuser
+
+ENV PYTHONPATH=/var/task/src
+ENTRYPOINT ["/usr/local/bin/python", "-m", "awslambdaric"]
+CMD ["pitch_model_api.lambda_handler.handler"]

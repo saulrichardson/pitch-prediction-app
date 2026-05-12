@@ -1,0 +1,43 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+.cache/
+
+# JavaScript and web artifacts
+node_modules/
+dist/
+build/
+.next/
+out/
+playwright-report/
+test-results/
+cdk.out/
+.playwright-cli/
+output/playwright/
+services/model-api/.venv/
+services/model-api/.pytest_cache/
+services/model-api/**/__pycache__/
+
+# Coverage and test output
+coverage/
+.coverage
+
+# Secrets and generated credentials
+*.pem
+*.key
+*.p12
+
+*.tsbuildinfo

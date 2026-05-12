@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@pitch/domain": ["../../packages/domain/src/index.ts"],
+      "@pitch/domain/*": ["../../packages/domain/src/*"],
+      "@pitch/db": ["../../packages/db/src/index.ts"],
+      "@pitch/db/*": ["../../packages/db/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

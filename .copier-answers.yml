@@ -1,0 +1,16 @@
+# Changes here will be overwritten by Copier; do not edit manually.
+_commit: v0.1.12
+_src_path: gh:saulrichardson/agentic-engineering-template
+adoption_date: '2026-05-09'
+backend: Haskell
+cloud_target: Undecided
+database: PostgreSQL
+frontend: Elm
+policy_engine: OPA / Rego
+primary_domain: Baseball
+project_description: A high-integrity software project developed with autonomous coding
+    agents.
+project_name: Pitch Prediction App
+project_slug: pitch-prediction-app
+vector_store: PostgreSQL + pgvector
+workflow_runtime: Temporal

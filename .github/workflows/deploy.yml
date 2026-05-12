@@ -1,0 +1,86 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: pitch-sequence-serverless-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY_NAME: pitch-prediction-app
+  SERVERLESS_WEB_IMAGE_TAG: serverless-${{ github.sha }}
+  MODEL_LAMBDA_FUNCTION_NAME: pitch-sequence-model-lambda
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install uv
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:model
+      - run: npm run build
+      - name: Ensure ECR repository and lifecycle
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY_NAME" >/dev/null 2>&1 \
+            || aws ecr create-repository --repository-name "$ECR_REPOSITORY_NAME" >/dev/null
+          LIFECYCLE_POLICY='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 3 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":3},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 20 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}'
+          aws ecr put-lifecycle-policy --repository-name "$ECR_REPOSITORY_NAME" --lifecycle-policy-text "$LIFECYCLE_POLICY" >/dev/null
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push serverless web image
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_NAME}:${SERVERLESS_WEB_IMAGE_TAG}"
+          docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.web-lambda -t "$IMAGE" --push .
+      - name: Deploy CDK stack
+        run: npm --workspace @pitch/infra run deploy
+      - name: Resolve serverless URL
+        id: app-url
+        run: |
+          URL="$(aws cloudformation describe-stacks \
+            --stack-name PitchSequenceServerlessStack \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServerlessWebUrl'].OutputValue" \
+            --output text)"
+          if [ -z "$URL" ] || [ "$URL" = "None" ]; then
+            echo "Could not resolve ServerlessWebUrl" >&2
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Wait for serverless readiness
+        run: |
+          for i in $(seq 1 60); do
+            code="$(curl -sS -o /tmp/ready.json -w "%{http_code}" "${{ steps.app-url.outputs.url }}/ready" || true)"
+            cat /tmp/ready.json || true
+            echo
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Serverless app did not become ready." >&2
+          exit 1
+      - name: Verify serverless product flow
+        env:
+          BASE_URL: ${{ steps.app-url.outputs.url }}
+        run: npm run verify:product

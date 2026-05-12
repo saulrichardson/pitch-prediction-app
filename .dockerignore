@@ -1,0 +1,15 @@
+node_modules
+.next
+cdk.out
+coverage
+playwright-report
+test-results
+.git
+.env
+.env.*
+tmp
+temp
+.cache
+services/model-api/.venv
+services/model-api/.pytest_cache
+services/model-api/__pycache__

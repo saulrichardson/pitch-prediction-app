@@ -1,0 +1,109 @@
+import * as cdk from "aws-cdk-lib";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as ecr from "aws-cdk-lib/aws-ecr";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import { Construct } from "constructs";
+
+export class PitchSequenceServerlessStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    const repositoryName = process.env.ECR_REPOSITORY_NAME ?? "pitch-prediction-app";
+    const webImageTag = process.env.SERVERLESS_WEB_IMAGE_TAG ?? process.env.IMAGE_TAG ?? "serverless-latest";
+    const modelFunctionName = process.env.MODEL_LAMBDA_FUNCTION_NAME ?? "pitch-sequence-model-lambda";
+    const webMemoryMb = Number(process.env.SERVERLESS_WEB_MEMORY_MB ?? "2048");
+    const webTimeoutSeconds = Number(process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "60");
+    const webReservedConcurrency = process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY
+      ? Number(process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY)
+      : undefined;
+
+    const repository = ecr.Repository.fromRepositoryName(this, "Repository", repositoryName);
+    const modelFunction = lambda.Function.fromFunctionName(this, "ModelFunction", modelFunctionName);
+
+    const table = new dynamodb.Table(this, "StateTable", {
+      tableName: "pitch-sequence-serverless-state",
+      partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: "expiresAt",
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    const appSecret = new secretsmanager.Secret(this, "AppSecrets", {
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({}),
+        generateStringKey: "sessionSecret",
+        passwordLength: 64,
+        excludePunctuation: true
+      }
+    });
+
+    const webLogGroup = new logs.LogGroup(this, "WebFunctionLogGroup", {
+      logGroupName: "/aws/lambda/pitch-sequence-serverless-web",
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    const webFunction = new lambda.DockerImageFunction(this, "WebFunction", {
+      functionName: "pitch-sequence-serverless-web",
+      code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: webImageTag }),
+      architecture: lambda.Architecture.X86_64,
+      memorySize: webMemoryMb,
+      timeout: cdk.Duration.seconds(webTimeoutSeconds),
+      reservedConcurrentExecutions: webReservedConcurrency,
+      ephemeralStorageSize: cdk.Size.mebibytes(1024),
+      logGroup: webLogGroup,
+      environment: {
+        NODE_ENV: "production",
+        STORAGE_MODE: "dynamodb",
+        DYNAMODB_TABLE_NAME: table.tableName,
+        MODEL_BACKEND: "lambda",
+        MODEL_LAMBDA_FUNCTION_NAME: modelFunctionName,
+        MODEL_REQUEST_TIMEOUT_MS: String(Math.min(webTimeoutSeconds * 1000 - 5000, 55000)),
+        APP_SECRET_JSON: appSecret.secretValue.toString(),
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      }
+    });
+
+    table.grantReadWriteData(webFunction);
+    modelFunction.grantInvoke(webFunction);
+
+    const functionUrl = webFunction.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE
+    });
+
+    const distribution = new cloudfront.Distribution(this, "Distribution", {
+      defaultBehavior: {
+        origin: new origins.FunctionUrlOrigin(functionUrl, {
+          readTimeout: cdk.Duration.seconds(60),
+          keepaliveTimeout: cdk.Duration.seconds(60)
+        }),
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
+      },
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      comment: "Pitch Prediction App serverless web/API distribution"
+    });
+
+    new cdk.CfnOutput(this, "ServerlessWebUrl", {
+      value: `https://${distribution.distributionDomainName}`
+    });
+
+    new cdk.CfnOutput(this, "ServerlessStateTableName", {
+      value: table.tableName
+    });
+
+    new cdk.CfnOutput(this, "ServerlessWebFunctionName", {
+      value: webFunction.functionName
+    });
+  }
+}

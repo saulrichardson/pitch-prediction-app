@@ -1,0 +1,54 @@
+{
+  "name": "pitch-prediction-app-serverless",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pitch Prediction App: real-game next-pitch prediction and actual reveal scoring.",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra"
+  ],
+  "scripts": {
+    "dev": "STORAGE_MODE=${STORAGE_MODE:-memory} npm --workspace @pitch/web run dev",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:model": "uv run --directory services/model-api pytest",
+    "test:e2e": "playwright test",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm --workspace @pitch/db run db:generate",
+    "db:migrate": "npm --workspace @pitch/db run db:migrate",
+    "infra:synth": "npm --workspace @pitch/infra run synth",
+    "verify:product": "node scripts/verify-product-flows.mjs"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "dependencies": {
+    "postcss": "8.5.14"
+  },
+  "devDependencies": {
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
+    "@playwright/test": "^1.57.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^25.6.2",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
+    "jsdom": "^27.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.0.16"
+  },
+  "overrides": {
+    "esbuild": "^0.28.0",
+    "fast-uri": "3.1.2",
+    "postcss": "8.5.14",
+    "next@16.2.6": {
+      "postcss": "8.5.14"
+    }
+  }
+}
