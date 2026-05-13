@@ -37,3 +37,8 @@ PITCHPREDICT_WARM_ON_STARTUP=false
 `xlstm` downloads the public `baseball-analytica/pitchpredict-xlstm` checkpoint
 through the `pitchpredict` package on first real prediction unless
 `PITCHPREDICT_XLSTM_PATH` points to a local checkpoint directory.
+
+For deployed product traffic, set `PITCHPREDICT_WARM_ON_STARTUP=true` and route
+web invokes through a published Lambda alias with provisioned concurrency. With
+warmup disabled, `/ready` reports `loading` until at least one real prediction
+has completed.

@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 10_000 },
   webServer: {
-    command: "test -n \"$MODEL_BASE_URL\" || (echo 'MODEL_BASE_URL is required for e2e tests because mock predictions are disabled.' && exit 1); npm run dev",
+    command: "if [ -z \"$MODEL_BASE_URL\" ]; then echo 'MODEL_BASE_URL is required for e2e tests because mock predictions are disabled.' >&2; exit 1; fi; npm run dev",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     env: {

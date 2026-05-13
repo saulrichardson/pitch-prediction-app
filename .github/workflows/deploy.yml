@@ -15,6 +15,15 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY_NAME: pitch-prediction-app
   SERVERLESS_WEB_IMAGE_TAG: serverless-${{ github.sha }}
+  MODEL_ECR_REPOSITORY_NAME: pitch-prediction-model-api
+  MODEL_IMAGE_TAG: model-${{ github.sha }}
+  MODEL_LAMBDA_FUNCTION_NAME: pitch-sequence-model-lambda
+  MODEL_LAMBDA_ALIAS: live
+  MODEL_LAMBDA_INVOKE_TARGET: pitch-sequence-model-lambda:live
+  MODEL_LAMBDA_PROVISIONED_CONCURRENCY: "1"
+  MODEL_LAMBDA_RESERVED_CONCURRENCY: "4"
+  MODEL_LAMBDA_TIMEOUT_SECONDS: "300"
+  MODEL_LAMBDA_MEMORY_MB: "4096"
   CUSTOM_DOMAIN_NAME: baseball.saulrichardson.io
   ACM_CERTIFICATE_ARN: arn:aws:acm:us-east-1:492205018164:certificate/62136baf-0216-4c9a-acbc-7e6e1694b0f0
 
@@ -66,6 +75,8 @@ jobs:
       - name: Login to ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
+      - name: Build, push, and warm model Lambda
+        run: bash scripts/deploy-model-lambda.sh
       - name: Build and push serverless web image
         run: |
           IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_NAME}:${SERVERLESS_WEB_IMAGE_TAG}"

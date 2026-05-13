@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from pitch_model_api.main import app, require_service_auth
 from pitch_model_api.config import Settings, settings_from_env
 from pitch_model_api.lambda_handler import configure_writable_runtime_dirs
+from pitch_model_api.runtime import PitchPredictRuntime
 
 
 def test_prediction_route_is_registered() -> None:
@@ -66,3 +67,52 @@ def test_lambda_runtime_dirs_are_writable(monkeypatch, tmp_path) -> None:
 
     for path in (pybaseball_cache, model_dir, cache_dir, log_dir):
         assert path.is_dir()
+
+
+class RuntimeWithFakeClient(PitchPredictRuntime):
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(settings)
+        self.warm_calls = 0
+
+    def _build_client(self) -> object:
+        return object()
+
+    async def _warm(self) -> None:
+        self.warm_calls += 1
+        self._loaded = True
+
+
+def runtime_settings(*, warm_on_startup: bool) -> Settings:
+    return Settings(
+        algorithm="xlstm",
+        sample_size=12,
+        warm_on_startup=warm_on_startup,
+        api_key=None,
+        api_auth_required=False,
+        cache_dir=".cache",
+        log_dir=".logs",
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_start_without_warmup_does_not_claim_prediction_readiness() -> None:
+    runtime = RuntimeWithFakeClient(runtime_settings(warm_on_startup=False))
+
+    await runtime.start()
+
+    health = runtime.health()
+    assert health.status == "loading"
+    assert health.loaded is False
+    assert runtime.warm_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_runtime_start_with_warmup_waits_until_model_is_ready() -> None:
+    runtime = RuntimeWithFakeClient(runtime_settings(warm_on_startup=True))
+
+    await runtime.start()
+
+    health = runtime.health()
+    assert health.status == "ok"
+    assert health.loaded is True
+    assert runtime.warm_calls == 1

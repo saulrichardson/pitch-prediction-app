@@ -38,3 +38,5 @@ Use `docs/templates/adr.md` as the starting point.
   CloudFront/Lambda Web Adapter/DynamoDB deployment for this serverless repo.
 - `0009-remove-archived-scenario-api-surface.md`: removes branch/manual
   scenario behavior from the active v1 web/API/domain surface.
+- `0010-use-warmed-model-lambda-alias.md`: routes production model invokes to a
+  warmed `live` Lambda alias with provisioned concurrency.

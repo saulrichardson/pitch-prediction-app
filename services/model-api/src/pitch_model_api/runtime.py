@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
@@ -17,7 +16,6 @@ class PitchPredictRuntime:
         self._client: Any | None = None
         self._loaded = False
         self._error: str | None = None
-        self._load_task: asyncio.Task[None] | None = None
 
     @property
     def model_version(self) -> str:
@@ -30,9 +28,7 @@ class PitchPredictRuntime:
     async def start(self) -> None:
         self._client = self._build_client()
         if self.settings.warm_on_startup:
-            self._load_task = asyncio.create_task(self._warm())
-        else:
-            self._loaded = True
+            await self._warm()
 
     async def predict(self, request: PredictionRequest) -> PredictionResponse:
         if self._error:

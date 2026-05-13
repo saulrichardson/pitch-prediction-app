@@ -5,9 +5,10 @@ test("reaches the next-pitch cockpit entry flow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Predict the next pitch. Reveal the result." })).toBeVisible();
   await expect(page.getByText(/Start a real Mets replay/i)).toHaveCount(0);
-  await expect(page.getByText("Reads")).toBeVisible();
-  await expect(page.getByText("Shows")).toBeVisible();
-  await expect(page.getByText("Scores")).toBeVisible();
+  const introFacts = page.locator('dl[aria-label="Replay inputs and outputs"]');
+  await expect(introFacts.getByText("Reads", { exact: true })).toBeVisible();
+  await expect(introFacts.getByText("Shows", { exact: true })).toBeVisible();
+  await expect(introFacts.getByText("Scores", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /GitHub Repository/i })).toHaveAttribute(
     "href",
     "https://github.com/saulrichardson/pitch-prediction-app-serverless"

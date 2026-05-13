@@ -16,6 +16,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const repositoryName = process.env.ECR_REPOSITORY_NAME ?? "pitch-prediction-app";
     const webImageTag = process.env.SERVERLESS_WEB_IMAGE_TAG ?? process.env.IMAGE_TAG ?? "serverless-latest";
     const modelFunctionName = process.env.MODEL_LAMBDA_FUNCTION_NAME ?? "pitch-sequence-model-lambda";
+    const modelInvokeTarget = process.env.MODEL_LAMBDA_INVOKE_TARGET ?? modelFunctionName;
     const webMemoryMb = Number(process.env.SERVERLESS_WEB_MEMORY_MB ?? "2048");
     const webTimeoutSeconds = Number(process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "60");
     const webReservedConcurrency = process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY
@@ -29,7 +30,13 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     }
 
     const repository = ecr.Repository.fromRepositoryName(this, "Repository", repositoryName);
-    const modelFunction = lambda.Function.fromFunctionName(this, "ModelFunction", modelFunctionName);
+    const modelFunctionArn = cdk.Stack.of(this).formatArn({
+      service: "lambda",
+      resource: "function",
+      resourceName: modelInvokeTarget,
+      arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME
+    });
+    const modelFunction = lambda.Function.fromFunctionArn(this, "ModelFunction", modelFunctionArn);
 
     const table = new dynamodb.Table(this, "StateTable", {
       tableName: "pitch-sequence-serverless-state",
@@ -37,7 +44,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       timeToLiveAttribute: "expiresAt",
-      removalPolicy: cdk.RemovalPolicy.DESTROY
+      removalPolicy: cdk.RemovalPolicy.RETAIN
     });
 
     const appSecret = new secretsmanager.Secret(this, "AppSecrets", {
@@ -52,7 +59,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const webLogGroup = new logs.LogGroup(this, "WebFunctionLogGroup", {
       logGroupName: "/aws/lambda/pitch-sequence-serverless-web",
       retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
+      removalPolicy: cdk.RemovalPolicy.RETAIN
     });
 
     const webFunction = new lambda.DockerImageFunction(this, "WebFunction", {
@@ -69,7 +76,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         STORAGE_MODE: "dynamodb",
         DYNAMODB_TABLE_NAME: table.tableName,
         MODEL_BACKEND: "lambda",
-        MODEL_LAMBDA_FUNCTION_NAME: modelFunctionName,
+        MODEL_LAMBDA_FUNCTION_NAME: modelInvokeTarget,
         MODEL_REQUEST_TIMEOUT_MS: String(Math.min(webTimeoutSeconds * 1000 - 5000, 55000)),
         APP_SECRET_JSON: appSecret.secretValue.toString(),
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"

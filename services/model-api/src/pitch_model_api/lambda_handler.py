@@ -12,6 +12,7 @@ from .models import PredictionRequest
 from .runtime import PitchPredictRuntime
 
 _runtime: PitchPredictRuntime | None = None
+_runtime_init_error: str | None = None
 
 
 def configure_writable_runtime_dirs() -> None:
@@ -33,6 +34,24 @@ def configure_writable_runtime_dirs() -> None:
             os.environ[name] = value
     for name in defaults:
         os.makedirs(os.environ[name], exist_ok=True)
+
+
+async def _initialize_runtime() -> PitchPredictRuntime:
+    configure_writable_runtime_dirs()
+    runtime = PitchPredictRuntime(settings_from_env())
+    await runtime.start()
+    return runtime
+
+
+def warm_on_startup_enabled() -> bool:
+    return os.getenv("PITCHPREDICT_WARM_ON_STARTUP", "").lower() in {"1", "true", "yes", "on"}
+
+
+if warm_on_startup_enabled():
+    try:
+        _runtime = asyncio.run(_initialize_runtime())
+    except Exception as exc:
+        _runtime_init_error = str(exc)
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
@@ -87,10 +106,12 @@ async def _handle(event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _get_runtime() -> PitchPredictRuntime:
-    global _runtime
+    global _runtime, _runtime_init_error
     if _runtime is None:
-        configure_writable_runtime_dirs()
-        runtime = PitchPredictRuntime(settings_from_env())
-        await runtime.start()
-        _runtime = runtime
+        try:
+            _runtime = await _initialize_runtime()
+            _runtime_init_error = None
+        except Exception as exc:
+            _runtime_init_error = str(exc)
+            raise HTTPException(status_code=503, detail=f"Model service failed to initialize: {_runtime_init_error}") from exc
     return _runtime

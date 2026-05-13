@@ -42,6 +42,7 @@ export async function createActualTimeline(input: {
 export function revealCurrentPitch(timeline: Timeline) {
   const pitch = timeline.actualPitches[timeline.currentPitchIndex];
   if (!pitch) throw new Error("No pitch is available to reveal.");
+  if (timeline.actualRevealed) throw new Error("Actual pitch is already revealed.");
   const evaluation = evaluatePitch(timeline.actualPrediction, pitch);
   return {
     timeline: { ...timeline, actualRevealed: true, updatedAt: new Date().toISOString() },

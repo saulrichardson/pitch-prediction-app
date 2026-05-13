@@ -198,6 +198,30 @@ describe("strike zone estimates", () => {
 });
 
 describe("actual timeline replay", () => {
+  it("rejects revealing the same pitch twice", async () => {
+    const timeline = await createActualTimeline({
+      workspaceId: "workspace",
+      replay: {
+        game: {
+          gamePk: "game",
+          label: "Away @ Home",
+          officialDate: "2026-05-09",
+          awayTeam: "Away",
+          homeTeam: "Home",
+          awayScore: 0,
+          homeScore: 0,
+          status: "Final"
+        },
+        pitches: [testPitch()]
+      },
+      predict: testPredict
+    });
+
+    const revealed = revealCurrentPitch(timeline).timeline;
+
+    expect(() => revealCurrentPitch(revealed)).toThrow("Actual pitch is already revealed.");
+  });
+
   it("records the pre-pitch forecast with actual history when advancing", async () => {
     const pitch: PitchEvent = {
       id: "actual",

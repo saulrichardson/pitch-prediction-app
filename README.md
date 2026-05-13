@@ -67,7 +67,9 @@ and returns only the prediction and reveal data needed by the UI.
 In the current AWS demo, CloudFront routes to the Next.js web/API app running
 as a Lambda container through AWS Lambda Web Adapter. DynamoDB stores
 replay/timeline state, and the web Lambda invokes the real model through an
-IAM-scoped model Lambda. The deployed path avoids standing web compute,
+IAM-scoped model Lambda `live` alias. The model alias is warmed with
+provisioned concurrency so readiness reflects a model instance that can answer
+the first replay request. The deployed path avoids standing web compute,
 database, VPC, and NAT gateway cost while keeping state durable enough for
 shareable demo sessions.
 
