@@ -424,25 +424,6 @@ button {
   text-wrap: balance;
 }
 
-.intro-kicker {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.intro-kicker a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.24rem;
-  color: color-mix(in srgb, var(--muted) 82%, var(--text-strong));
-  text-decoration: none;
-}
-
-.intro-kicker a:hover {
-  color: var(--gold);
-}
-
 .intro-actions {
   display: flex;
   align-items: center;

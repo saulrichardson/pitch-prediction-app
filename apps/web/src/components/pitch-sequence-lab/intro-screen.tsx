@@ -1,4 +1,4 @@
-import { ArrowRight, Github, Loader2, Play, Radar, RotateCcw, ScanSearch } from "lucide-react";
+import { Github, Loader2, Play, Radar, RotateCcw, ScanSearch } from "lucide-react";
 
 export function IntroScreen({
   error,
@@ -17,24 +17,22 @@ export function IntroScreen({
     <section className="intro-board">
       <div className="intro-hero" aria-labelledby="intro-title">
         <div className="intro-copy">
-          <p className="small-label intro-kicker">
-            <a
-              href="https://github.com/saulrichardson/pitch-prediction-app-serverless"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Github size={13} />
-              GitHub Repository
-            </a>
-          </p>
           <h1 id="intro-title" className="display">Predict the next pitch. Reveal the result.</h1>
           <div className="intro-actions">
             <button className="btn btn-primary intro-enter" disabled={isLoading || !isHydrated} onClick={onEnter}>
               {isLoading ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
               {isLoading ? loadingMessage ?? "Loading game" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
             </button>
+            <a
+              href="https://github.com/saulrichardson/pitch-prediction-app-serverless"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Github size={16} />
+              GitHub Repository
+            </a>
             <a href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm" target="_blank" rel="noreferrer">
-              Model card <ArrowRight size={15} />
+              Model card
             </a>
           </div>
           {error ? <p className="intro-error">{error}</p> : null}
