@@ -40,3 +40,6 @@ Use `docs/templates/adr.md` as the starting point.
   scenario behavior from the active v1 web/API/domain surface.
 - `0010-use-warmed-model-lambda-alias.md`: routes production model invokes to a
   warmed `live` Lambda alias with provisioned concurrency.
+- `0011-adopt-async-timeline-start-jobs.md`: creates replay timelines through a
+  durable async start job so public cold starts show a waiting state instead of
+  timing out behind CloudFront.

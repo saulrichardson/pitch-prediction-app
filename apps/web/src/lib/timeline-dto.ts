@@ -1,8 +1,10 @@
 import type {
   ClientTimeline,
+  ClientTimelineStartJob,
   PitchEvent,
   PitchMoment,
-  Timeline
+  Timeline,
+  TimelineStartJob
 } from "@pitch/domain";
 
 export type ReplaySummaryDto = {
@@ -27,6 +29,21 @@ export function toReplaySummary(replay: { game: NonNullable<Timeline["game"]>; p
   return {
     game: replay.game,
     pitchCount: replay.pitches.length
+  };
+}
+
+export function toClientTimelineStartJob(job: TimelineStartJob): ClientTimelineStartJob {
+  return {
+    id: job.id,
+    gamePk: job.gamePk,
+    status: job.status,
+    timelineId: job.timelineId,
+    error: job.error,
+    attempts: job.attempts,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    startedAt: job.startedAt,
+    completedAt: job.completedAt
   };
 }
 

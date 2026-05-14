@@ -6,7 +6,8 @@ import type {
   PitchEvent,
   PredictionRequest,
   PredictionResponse,
-  Timeline
+  Timeline,
+  TimelineStartJob
 } from "@pitch/domain";
 import { getDynamoDbClient, getDynamoTableName } from "../client";
 import { memory } from "./memory";
@@ -119,6 +120,42 @@ export class DynamoDbStorage implements Storage {
     return timeline;
   }
 
+  async saveTimelineStartJob(job: TimelineStartJob): Promise<TimelineStartJob> {
+    const { client, tableName } = dynamoRuntime();
+    await client.send(new PutCommand({
+      TableName: tableName,
+      Item: {
+        pk: timelineStartJobPk(job.id),
+        sk: "METADATA",
+        entityType: "timeline_start_job",
+        jobId: job.id,
+        workspaceId: job.workspaceId,
+        gamePk: job.gamePk,
+        status: job.status,
+        timelineId: job.timelineId,
+        payload: job,
+        expiresAt: ttlFromNow(2)
+      }
+    }));
+    memory.timelineStartJobs.set(job.id, job);
+    return job;
+  }
+
+  async getTimelineStartJob(id: string, workspaceId?: string): Promise<TimelineStartJob | null> {
+    const cached = memory.timelineStartJobs.get(id);
+    if (cached && (!workspaceId || cached.workspaceId === workspaceId)) return cached;
+
+    const { client, tableName } = dynamoRuntime();
+    const row = await client.send(new GetCommand({
+      TableName: tableName,
+      Key: { pk: timelineStartJobPk(id), sk: "METADATA" }
+    }));
+    const job = row.Item?.payload as TimelineStartJob | undefined;
+    if (!job || (workspaceId && job.workspaceId !== workspaceId)) return null;
+    memory.timelineStartJobs.set(id, job);
+    return job;
+  }
+
   async savePredictionRun(run: { timelineId: string; pitchMoment: number; request: PredictionRequest; response: PredictionResponse }): Promise<void> {
     const { client, tableName } = dynamoRuntime();
     await client.send(new PutCommand({
@@ -191,6 +228,10 @@ function gamePk(gamePkValue: string) {
 
 function timelinePk(timelineId: string) {
   return `TIMELINE#${timelineId}`;
+}
+
+function timelineStartJobPk(jobId: string) {
+  return `TIMELINE_START_JOB#${jobId}`;
 }
 
 function auditPk(workspaceId?: string) {

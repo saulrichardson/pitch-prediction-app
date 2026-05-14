@@ -6,9 +6,10 @@ import type {
   PitchEvent,
   PredictionRequest,
   PredictionResponse,
-  Timeline
+  Timeline,
+  TimelineStartJob
 } from "@pitch/domain";
-import { auditEvents, games, pitchEvents, plateAppearances, players, predictionRuns, timelines } from "../schema";
+import { auditEvents, games, pitchEvents, plateAppearances, players, predictionRuns, timelineStartJobs, timelines } from "../schema";
 import { getReadyDb } from "../client";
 import { memory, MemoryStorage } from "./memory";
 import type { Storage } from "./types";
@@ -115,6 +116,44 @@ export class PostgresStorage implements Storage {
     if (!timeline || timeline.workspaceId !== workspaceId) return null;
     memory.timelines.set(id, timeline);
     return timeline;
+  }
+
+  async saveTimelineStartJob(job: TimelineStartJob): Promise<TimelineStartJob> {
+    const db = await getReadyDb();
+    if (!db) return new MemoryStorage().saveTimelineStartJob(job);
+    await db
+      .insert(timelineStartJobs)
+      .values({
+        id: job.id,
+        workspaceId: job.workspaceId,
+        gamePk: job.gamePk,
+        status: job.status,
+        timelineId: job.timelineId,
+        payload: job as never
+      })
+      .onConflictDoUpdate({
+        target: timelineStartJobs.id,
+        set: {
+          status: job.status,
+          timelineId: job.timelineId,
+          payload: job as never,
+          updatedAt: new Date()
+        }
+      });
+    memory.timelineStartJobs.set(job.id, job);
+    return job;
+  }
+
+  async getTimelineStartJob(id: string, workspaceId?: string): Promise<TimelineStartJob | null> {
+    const cached = memory.timelineStartJobs.get(id);
+    if (cached && (!workspaceId || cached.workspaceId === workspaceId)) return cached;
+    const db = await getReadyDb();
+    if (!db) return null;
+    const rows = await db.select().from(timelineStartJobs).where(eq(timelineStartJobs.id, id)).limit(1);
+    const job = rows[0]?.payload as TimelineStartJob | undefined;
+    if (!job || (workspaceId && job.workspaceId !== workspaceId)) return null;
+    memory.timelineStartJobs.set(id, job);
+    return job;
   }
 
   async savePredictionRun(run: { timelineId: string; pitchMoment: number; request: PredictionRequest; response: PredictionResponse }): Promise<void> {

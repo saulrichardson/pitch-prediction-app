@@ -8,25 +8,28 @@ import { appSecretConfig } from "./env";
 import { serviceUnavailable } from "./http";
 
 export type ModelHealthStatus = "ok" | "loading" | "unavailable";
+export type PredictPitchOptions = {
+  timeoutMs?: number;
+};
 
 type ModelBackend = "http" | "lambda";
 
 const lambdaClient = new LambdaClient({});
 
-export async function predictPitch(request: PredictionRequest): Promise<PredictionResponse> {
+export async function predictPitch(request: PredictionRequest, options: PredictPitchOptions = {}): Promise<PredictionResponse> {
   if (modelBackend() === "lambda") {
-    return predictPitchWithLambda(request);
+    return predictPitchWithLambda(request, options);
   }
 
-  return predictPitchWithHttp(request);
+  return predictPitchWithHttp(request, options);
 }
 
-async function predictPitchWithHttp(request: PredictionRequest): Promise<PredictionResponse> {
+async function predictPitchWithHttp(request: PredictionRequest, options: PredictPitchOptions): Promise<PredictionResponse> {
   const config = appSecretConfig();
   const baseUrl = config.modelBaseUrl;
   if (!baseUrl) throw serviceUnavailable("Real model prediction is unavailable because MODEL_BASE_URL is not configured.", "model_not_configured");
   const controller = new AbortController();
-  const timeoutMs = modelRequestTimeoutMs();
+  const timeoutMs = options.timeoutMs ?? modelRequestTimeoutMs();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/pitch/predict`, {
@@ -82,8 +85,8 @@ export async function modelHealth(): Promise<ModelHealthStatus> {
   }
 }
 
-async function predictPitchWithLambda(request: PredictionRequest): Promise<PredictionResponse> {
-  const payload = await invokeModelLambda({ action: "predict", request });
+async function predictPitchWithLambda(request: PredictionRequest, options: PredictPitchOptions): Promise<PredictionResponse> {
+  const payload = await invokeModelLambda({ action: "predict", request }, options.timeoutMs);
   if (!isModelLambdaOk(payload)) {
     throw modelLambdaError(payload);
   }

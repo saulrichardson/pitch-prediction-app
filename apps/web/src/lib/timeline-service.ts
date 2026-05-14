@@ -11,13 +11,22 @@ import { getStorage } from "@pitch/db";
 import { predictPitch } from "./model-service";
 import { conflict, notFound } from "./http";
 
-export async function createTimelineFromReplay(workspaceId: string, replayId: string, replayLoader: () => Promise<Parameters<typeof createActualTimeline>[0]["replay"]>) {
+export type TimelinePredictionOptions = {
+  predictionTimeoutMs?: number;
+};
+
+export async function createTimelineFromReplay(
+  workspaceId: string,
+  replayId: string,
+  replayLoader: () => Promise<Parameters<typeof createActualTimeline>[0]["replay"]>,
+  options: TimelinePredictionOptions = {}
+) {
   const replay = await replayLoader();
   if (replay.game.gamePk !== replayId) throw new Error("Replay loader returned a different game.");
   const timeline = await createActualTimeline({
     workspaceId,
     replay,
-    predict: predictionForTimeline
+    predict: (context, history, pitchIndex) => predictionForTimeline(context, history, pitchIndex, options)
   });
   await getStorage().saveTimeline(timeline);
   await getStorage().audit({ workspaceId, timelineId: timeline.id, action: "timeline.created", payload: { gamePk: replayId } });
@@ -57,7 +66,12 @@ export async function loadTimeline(id: string, workspaceId: string) {
   return timeline;
 }
 
-async function predictionForTimeline(timeline: PredictionContext, history: Timeline["actualHistory"], pitchIndex: number) {
+async function predictionForTimeline(
+  timeline: PredictionContext,
+  history: Timeline["actualHistory"],
+  pitchIndex: number,
+  options: TimelinePredictionOptions = {}
+) {
   const currentPitch = timeline.actualPitches[pitchIndex];
   if (!currentPitch) throw new Error("No current pitch is available for prediction.");
   const request = buildPredictionRequest({
@@ -66,7 +80,7 @@ async function predictionForTimeline(timeline: PredictionContext, history: Timel
     gameDate: timeline.game.officialDate,
     pitchNumber: pitchIndex + 1
   });
-  const response = await predictPitch(request);
+  const response = await predictPitch(request, { timeoutMs: options.predictionTimeoutMs });
   await getStorage().savePredictionRun({
     timelineId: timeline.id,
     pitchMoment: pitchIndex,

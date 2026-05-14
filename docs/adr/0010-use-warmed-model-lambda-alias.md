@@ -25,10 +25,10 @@ the warmup path so model download/load work happens during deployment instead
 of during the user's first replay request. The web stack invokes the alias
 target `pitch-sequence-model-lambda:live` rather than unqualified `$LATEST`.
 
-The public deployment keeps two provisioned model environments and caps model
-reserved concurrency at the same value. That favors predictable warmed service
-for low public traffic and rejects excess overlap quickly instead of spilling
-into cold model environments that can exceed the web timeout.
+The public deployment keeps one provisioned model environment for the normal
+single-user path and caps model reserved concurrency at two. That preserves a
+fast warm lane while allowing one cold overflow invocation for public discovery
+traffic without letting many expensive cold model loads fan out at once.
 
 The model runtime reports `loading` until warmup or a successful prediction has
 actually completed. It no longer marks itself ready immediately after building
@@ -47,17 +47,18 @@ now has a stable model target that can be warmed and rolled forward by version.
   origin limit and still leaves users waiting on cold model load.
 - Return substitute predictions while the model warms. This violates the
   product contract that real predictions are required.
-- Make timeline creation asynchronous with polling. That is a valid future
-  architecture, but it is more product and API surface area than the current
-  focused demo needs.
+- Make timeline creation asynchronous with polling. This became the selected
+  follow-up in ADR 0011 once the app moved from a manually shown demo to a
+  public-facing project.
 
 ## Consequences
 
 The app gets a more reliable first replay start and a readiness check that
-reflects the real model. The tradeoff is a standing AWS cost for two
-provisioned model execution environments with enough memory and timeout
-headroom to load the xLSTM model. Users beyond that small warm pool may receive
-a retryable model-busy response.
+reflects the real model. The tradeoff is a standing AWS cost for one
+provisioned model execution environment with enough memory and timeout
+headroom to load the xLSTM model. Users beyond the warm lane may wait in the
+async start state or receive a retryable model-busy response on later
+same-replay predictions.
 
 Future deploys must update the model alias before the web stack points traffic
 at it. `scripts/deploy-model-lambda.sh` owns that operation in local deploys and

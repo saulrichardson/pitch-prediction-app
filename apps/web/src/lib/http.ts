@@ -24,6 +24,10 @@ export function requestError(message: string, code = "bad_request") {
   return new HttpError(400, message, code);
 }
 
+export function unauthorized(message: string, code = "unauthorized") {
+  return new HttpError(401, message, code);
+}
+
 export function notFound(message: string, code = "not_found") {
   return new HttpError(404, message, code);
 }

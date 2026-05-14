@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from "react";
 import type {
   ClientTimeline,
+  ClientTimelineStartJob,
   GameSummary,
   PitchEvaluation,
   PitchEvent
@@ -34,23 +35,68 @@ type LoadState =
       lastReveal?: { pitch: PitchEvent; evaluation: PitchEvaluation };
       notice?: { tone: "busy" | "error"; message: string };
     }
+  | { status: "waiting"; job: ClientTimelineStartJob; game: GameSummary | null; message: string }
   | { status: "error"; message: string };
 
 export default function PitchPredictionApp() {
   const [state, setState] = useState<LoadState>({ status: "idle" });
   const [isHydrated, setIsHydrated] = useState(false);
+  const waitingJobId = state.status === "waiting" ? state.job.id : null;
+  const waitingGame = state.status === "waiting" ? state.game : null;
 
   useEffect(() => {
     const hydrationReady = window.setTimeout(() => setIsHydrated(true), 0);
     return () => window.clearTimeout(hydrationReady);
   }, []);
 
+  useEffect(() => {
+    if (!waitingJobId) return undefined;
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const poll = async () => {
+      try {
+        const result = await getJson<{ job: ClientTimelineStartJob; timeline?: ClientTimeline }>(`/api/timeline-jobs/${waitingJobId}`);
+        if (cancelled) return;
+
+        if (result.job.status === "succeeded" && result.timeline) {
+          setState({ status: "ready", timeline: result.timeline, game: waitingGame });
+          return;
+        }
+
+        if (result.job.status === "failed") {
+          setState({ status: "error", message: timelineJobErrorMessage(result.job) });
+          return;
+        }
+
+        setState((current) => current.status === "waiting" && current.job.id === result.job.id
+          ? { ...current, job: result.job, message: timelineJobMessage(result.job) }
+          : current);
+        timer = window.setTimeout(poll, 2000);
+      } catch {
+        if (cancelled) return;
+        setState((current) => current.status === "waiting"
+          ? { ...current, message: "Still preparing the real model. This can take a minute after a cold start." }
+          : current);
+        timer = window.setTimeout(poll, 3000);
+      }
+    };
+
+    timer = window.setTimeout(poll, 1200);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [waitingJobId, waitingGame]);
+
   async function loadMetsGame() {
     await run("Loading latest Mets game", async () => {
       const latest = await getJson<{ game: GameSummary }>("/api/games/mets/latest");
       await getJson(`/api/games/${latest.game.gamePk}/replay`);
-      const created = await postJson<{ timeline: ClientTimeline }>("/api/timelines", { gamePk: latest.game.gamePk });
-      return { status: "ready", timeline: created.timeline, game: latest.game };
+      const created = await postJson<{ job: ClientTimelineStartJob; timeline?: ClientTimeline }>("/api/timeline-jobs", { gamePk: latest.game.gamePk });
+      if (created.timeline) return { status: "ready", timeline: created.timeline, game: latest.game };
+      return { status: "waiting", job: created.job, game: latest.game, message: timelineJobMessage(created.job) };
     });
   }
 
@@ -133,8 +179,8 @@ export default function PitchPredictionApp() {
         <IntroScreen
           error={state.status === "error" ? state.message : undefined}
           isHydrated={isHydrated}
-          isLoading={state.status === "loading"}
-          loadingMessage={state.status === "loading" ? state.message : undefined}
+          isLoading={state.status === "loading" || state.status === "waiting"}
+          loadingMessage={state.status === "loading" || state.status === "waiting" ? state.message : undefined}
           onEnter={loadMetsGame}
         />
       </main>
@@ -222,4 +268,18 @@ export default function PitchPredictionApp() {
       ) : null}
     </main>
   );
+}
+
+function timelineJobMessage(job: ClientTimelineStartJob) {
+  if (job.status === "pending") return "Queueing replay start";
+  if (job.status === "running") return "Warming the real model";
+  if (job.status === "succeeded") return "Opening replay";
+  return "Model warmup failed";
+}
+
+function timelineJobErrorMessage(job: ClientTimelineStartJob) {
+  if (job.error?.code === "model_timeout") {
+    return "The real model is taking longer than expected to warm up. Try starting the replay again in a moment.";
+  }
+  return job.error?.message ?? "The replay could not be prepared. Try starting again.";
 }

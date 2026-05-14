@@ -209,3 +209,26 @@ export type ClientTimeline = Omit<Timeline, "actualPitches"> & {
   nextPitchContext: PitchMoment | null;
   actualPitchCount: number;
 };
+
+export type TimelineStartJobStatus = "pending" | "running" | "succeeded" | "failed";
+
+export type TimelineStartJobError = {
+  message: string;
+  code: string;
+};
+
+export type TimelineStartJob = {
+  id: string;
+  workspaceId: string;
+  gamePk: string;
+  status: TimelineStartJobStatus;
+  timelineId: string | null;
+  error: TimelineStartJobError | null;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type ClientTimelineStartJob = Omit<TimelineStartJob, "workspaceId">;

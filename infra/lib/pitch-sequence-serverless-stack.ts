@@ -4,6 +4,7 @@ import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ecr from "aws-cdk-lib/aws-ecr";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
@@ -16,9 +17,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const repositoryName = process.env.ECR_REPOSITORY_NAME ?? "pitch-prediction-app";
     const webImageTag = process.env.SERVERLESS_WEB_IMAGE_TAG ?? process.env.IMAGE_TAG ?? "serverless-latest";
     const modelFunctionName = process.env.MODEL_LAMBDA_FUNCTION_NAME ?? "pitch-sequence-model-lambda";
-    const modelInvokeTarget = process.env.MODEL_LAMBDA_INVOKE_TARGET ?? modelFunctionName;
+    const modelInvokeTarget = process.env.MODEL_LAMBDA_INVOKE_TARGET ?? `${modelFunctionName}:live`;
     const webMemoryMb = Number(process.env.SERVERLESS_WEB_MEMORY_MB ?? "2048");
-    const webTimeoutSeconds = Number(process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "60");
+    const webTimeoutSeconds = Number(process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "300");
     const webReservedConcurrency = process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY
       ? Number(process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY)
       : undefined;
@@ -34,6 +35,12 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       service: "lambda",
       resource: "function",
       resourceName: modelInvokeTarget,
+      arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME
+    });
+    const webFunctionArn = cdk.Stack.of(this).formatArn({
+      service: "lambda",
+      resource: "function",
+      resourceName: "pitch-sequence-serverless-web",
       arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME
     });
     const modelFunction = lambda.Function.fromFunctionArn(this, "ModelFunction", modelFunctionArn);
@@ -78,6 +85,8 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         MODEL_BACKEND: "lambda",
         MODEL_LAMBDA_FUNCTION_NAME: modelInvokeTarget,
         MODEL_REQUEST_TIMEOUT_MS: String(Math.min(webTimeoutSeconds * 1000 - 5000, 55000)),
+        BACKGROUND_MODEL_REQUEST_TIMEOUT_MS: String(Math.min(webTimeoutSeconds * 1000 - 10000, 290000)),
+        TIMELINE_WORKER_LAMBDA_FUNCTION_NAME: "pitch-sequence-serverless-web",
         APP_SECRET_JSON: appSecret.secretValue.toString(),
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
       }
@@ -85,6 +94,10 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
 
     table.grantReadWriteData(webFunction);
     modelFunction.grantInvoke(webFunction);
+    webFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["lambda:InvokeFunction"],
+      resources: [webFunctionArn]
+    }));
 
     const functionUrl = webFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE

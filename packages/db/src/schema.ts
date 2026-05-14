@@ -104,6 +104,24 @@ export const timelines = pgTable(
   })
 );
 
+export const timelineStartJobs = pgTable(
+  "timeline_start_jobs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    gamePk: text("game_pk").notNull(),
+    status: text("status").notNull(),
+    timelineId: text("timeline_id"),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull()
+  },
+  (table) => ({
+    workspaceIdx: index("timeline_start_jobs_workspace_idx").on(table.workspaceId),
+    statusIdx: index("timeline_start_jobs_status_idx").on(table.status)
+  })
+);
+
 export const branchPitchEvents = pgTable(
   // Legacy SQL durable-mode table retained until a deliberate drop migration is approved.
   "branch_pitch_events",

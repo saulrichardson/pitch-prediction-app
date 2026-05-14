@@ -61,6 +61,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForTimelineJob(client, jobId, timeoutMs = 360000) {
+  const started = Date.now();
+  let latest;
+  while (Date.now() - started < timeoutMs) {
+    latest = await client.request(`/api/timeline-jobs/${jobId}`);
+    assert(latest.response.ok, "timeline start job should be readable by the workspace", latest.payload);
+    const status = latest.payload.job?.status;
+    if (status === "succeeded" && latest.payload.timeline) return latest.payload.timeline;
+    if (status === "failed") {
+      throw new Error(`timeline start job failed: ${latest.payload.job?.error?.message ?? "unknown error"}`);
+    }
+    await sleep(2500);
+  }
+  throw new Error(`timeline start job did not complete within ${Math.round(timeoutMs / 1000)} seconds\n${JSON.stringify(latest?.payload, null, 2)}`);
+}
+
 const anon = createClient();
 const client = createClient();
 let latestGame;
@@ -112,9 +128,11 @@ await step("latest Mets game and replay can be loaded", async () => {
 });
 
 await step("actual timeline starts before reveal with prediction visible", async () => {
-  const created = await client.request("/api/timelines", { method: "POST", body: { gamePk: latestGame.gamePk } });
-  assert(created.response.ok, "timeline should be created from replay", created.payload);
-  timeline = created.payload.timeline;
+  const created = await client.request("/api/timeline-jobs", { method: "POST", body: { gamePk: latestGame.gamePk } });
+  assert(created.response.status === 202, "timeline start should return an async job", created.payload);
+  assert(created.payload.job?.id, "timeline start should include a job id", created.payload);
+  assert(["pending", "running"].includes(created.payload.job.status), "timeline start job should begin pending or running", created.payload);
+  timeline = await waitForTimelineJob(client, created.payload.job.id);
   assert(timeline.mode === "real-game", "timeline should be real-game mode", timeline);
   assert(timeline.currentPitchIndex === 0, "timeline should start on first pitch", timeline);
   assert(timeline.actualRevealed === false, "actual pitch should start hidden", timeline);
