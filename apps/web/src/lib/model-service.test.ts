@@ -22,7 +22,13 @@ const originalEnv = { ...process.env };
 beforeEach(() => {
   vi.restoreAllMocks();
   lambdaSendMock.mockReset();
-  process.env = { ...originalEnv, MODEL_BASE_URL: "http://model.local", MODEL_API_KEY: "secret" };
+  process.env = {
+    ...originalEnv,
+    MODEL_BACKEND: "http",
+    MODEL_BASE_URL: "http://model.local",
+    MODEL_API_KEY: "secret",
+    MODEL_LAMBDA_FUNCTION_NAME: ""
+  };
 });
 
 afterEach(() => {
