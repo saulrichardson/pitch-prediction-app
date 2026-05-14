@@ -135,16 +135,32 @@ if [ -z "${version}" ] || [ "${version}" = "None" ]; then
 fi
 
 if aws lambda get-alias --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" --name "${MODEL_LAMBDA_ALIAS}" >/dev/null 2>&1; then
-  aws lambda update-alias \
+  if aws lambda get-provisioned-concurrency-config \
     --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
-    --name "${MODEL_LAMBDA_ALIAS}" \
-    --function-version "${version}" >/dev/null
-else
-  aws lambda create-alias \
+    --qualifier "${MODEL_LAMBDA_ALIAS}" >/dev/null 2>&1; then
+    aws lambda delete-provisioned-concurrency-config \
+      --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
+      --qualifier "${MODEL_LAMBDA_ALIAS}" >/dev/null
+
+    for _ in $(seq 1 30); do
+      if ! aws lambda get-provisioned-concurrency-config \
+        --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
+        --qualifier "${MODEL_LAMBDA_ALIAS}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+  fi
+
+  aws lambda delete-alias \
     --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
-    --name "${MODEL_LAMBDA_ALIAS}" \
-    --function-version "${version}" >/dev/null
+    --name "${MODEL_LAMBDA_ALIAS}" >/dev/null
 fi
+
+aws lambda create-alias \
+  --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
+  --name "${MODEL_LAMBDA_ALIAS}" \
+  --function-version "${version}" >/dev/null
 
 if [ "${MODEL_LAMBDA_PROVISIONED_CONCURRENCY}" -gt 0 ]; then
   aws lambda put-provisioned-concurrency-config \
