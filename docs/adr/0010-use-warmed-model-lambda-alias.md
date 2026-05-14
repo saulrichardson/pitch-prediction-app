@@ -25,6 +25,11 @@ the warmup path so model download/load work happens during deployment instead
 of during the user's first replay request. The web stack invokes the alias
 target `pitch-sequence-model-lambda:live` rather than unqualified `$LATEST`.
 
+The public deployment keeps two provisioned model environments and caps model
+reserved concurrency at the same value. That favors predictable warmed service
+for low public traffic and rejects excess overlap quickly instead of spilling
+into cold model environments that can exceed the web timeout.
+
 The model runtime reports `loading` until warmup or a successful prediction has
 actually completed. It no longer marks itself ready immediately after building
 the client.
@@ -49,9 +54,10 @@ now has a stable model target that can be warmed and rolled forward by version.
 ## Consequences
 
 The app gets a more reliable first replay start and a readiness check that
-reflects the real model. The tradeoff is a standing AWS cost for one
-provisioned model execution environment with enough memory and timeout headroom
-to load the xLSTM model.
+reflects the real model. The tradeoff is a standing AWS cost for two
+provisioned model execution environments with enough memory and timeout
+headroom to load the xLSTM model. Users beyond that small warm pool may receive
+a retryable model-busy response.
 
 Future deploys must update the model alias before the web stack points traffic
 at it. `scripts/deploy-model-lambda.sh` owns that operation in local deploys and

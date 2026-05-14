@@ -125,6 +125,20 @@ describe("model service adapter", () => {
       code: "model_malformed_response"
     });
   });
+
+  it("turns serverless model Lambda throttling into a retryable busy error", async () => {
+    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    const throttle = new Error("Rate exceeded");
+    throttle.name = "TooManyRequestsException";
+    Object.assign(throttle, { $metadata: { httpStatusCode: 429 } });
+    lambdaSendMock.mockRejectedValue(throttle);
+
+    await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
+      status: 503,
+      code: "model_busy",
+      message: "The real model is handling another prediction. Try again in a moment."
+    });
+  });
 });
 
 function predictionRequest(): PredictionRequest {

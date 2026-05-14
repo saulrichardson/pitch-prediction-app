@@ -41,4 +41,6 @@ through the `pitchpredict` package on first real prediction unless
 For deployed product traffic, set `PITCHPREDICT_WARM_ON_STARTUP=true` and route
 web invokes through a published Lambda alias with provisioned concurrency. With
 warmup disabled, `/ready` reports `loading` until at least one real prediction
-has completed.
+has completed. The public low-traffic deployment keeps reserved concurrency
+equal to provisioned concurrency so excess overlap fails quickly instead of
+spilling into cold model environments.

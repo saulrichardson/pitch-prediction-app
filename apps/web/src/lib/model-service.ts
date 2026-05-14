@@ -137,6 +137,9 @@ async function invokeModelLambda(payload: unknown, timeoutMs = modelRequestTimeo
     if (error instanceof Error && error.name === "AbortError") {
       throw serviceUnavailable(`Real model prediction timed out after ${Math.round(timeoutMs / 1000)} seconds.`, "model_timeout");
     }
+    if (isLambdaThrottleError(error)) {
+      throw serviceUnavailable("The real model is handling another prediction. Try again in a moment.", "model_busy");
+    }
     if (error instanceof SyntaxError) {
       throw serviceUnavailable("Real model prediction returned malformed JSON.", "model_malformed_response");
     }
@@ -198,6 +201,13 @@ function isModelLambdaOk(payload: Record<string, unknown>): payload is Record<st
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isLambdaThrottleError(error: unknown) {
+  if (!isRecord(error)) return false;
+  const name = typeof error.name === "string" ? error.name : "";
+  const status = isRecord(error.$metadata) ? error.$metadata.httpStatusCode : undefined;
+  return name === "TooManyRequestsException" || status === 429;
 }
 
 function lambdaErrorMessage(payload: Record<string, unknown>) {
