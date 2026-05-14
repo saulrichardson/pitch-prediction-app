@@ -11,7 +11,7 @@ test("reaches the next-pitch cockpit entry flow", async ({ page }) => {
   await expect(introFacts.getByText("Scores", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /GitHub Repository/i })).toHaveAttribute(
     "href",
-    "https://github.com/saulrichardson/pitch-prediction-app-serverless"
+    "https://github.com/saulrichardson/pitch-prediction-app"
   );
   await expect(page.getByText(/Model card/i)).toBeVisible();
   await expect(page.getByText("Forecast is locked before reveal.")).toBeVisible();

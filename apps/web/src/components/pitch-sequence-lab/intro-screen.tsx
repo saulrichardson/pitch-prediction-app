@@ -24,7 +24,7 @@ export function IntroScreen({
               {isLoading ? loadingMessage ?? "Loading game" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
             </button>
             <a
-              href="https://github.com/saulrichardson/pitch-prediction-app-serverless"
+              href="https://github.com/saulrichardson/pitch-prediction-app"
               target="_blank"
               rel="noreferrer"
             >
