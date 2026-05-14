@@ -32,6 +32,7 @@ export function IntroScreen({
               GitHub Repository
             </a>
             <a href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm" target="_blank" rel="noreferrer">
+              <HuggingFaceIcon size={17} />
               Model card
             </a>
           </div>
@@ -103,5 +104,45 @@ export function IntroScreen({
         </div>
       </div>
     </section>
+  );
+}
+
+function HuggingFaceIcon({ size }: { size: number }) {
+  return (
+    <svg
+      className="hugging-face-icon"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M4.5 12.4c-1.6-.7-2.2-2.1-1.5-3 .7-.8 2-.4 3.1.9"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M19.5 12.4c1.6-.7 2.2-2.1 1.5-3-.7-.8-2-.4-3.1.9"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="12" cy="12.2" r="7.6" fill="#ffd84d" />
+      <circle cx="9.2" cy="10.6" r="1.15" fill="#071128" />
+      <circle cx="14.8" cy="10.6" r="1.15" fill="#071128" />
+      <path
+        d="M8.8 14.2c.9.9 2 1.3 3.2 1.3s2.3-.4 3.2-1.3"
+        fill="none"
+        stroke="#071128"
+        strokeLinecap="round"
+        strokeWidth="1.45"
+      />
+    </svg>
   );
 }
