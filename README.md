@@ -1,5 +1,7 @@
 # Pitch Prediction App
 
+Live demo: [https://baseball.saulrichardson.io](https://baseball.saulrichardson.io)
+
 Pitch Prediction App is a replay cockpit for next-pitch prediction. It loads a
 real MLB game and uses the public
 [pitchpredict-xlstm model](https://huggingface.co/baseball-analytica/pitchpredict-xlstm)
