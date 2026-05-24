@@ -8,6 +8,7 @@ import { appSecretConfig } from "./env";
 import { serviceUnavailable } from "./http";
 
 export type ModelHealthStatus = "ok" | "loading" | "unavailable";
+export type ModelReadinessStatus = ModelHealthStatus | "configured";
 export type PredictPitchOptions = {
   timeoutMs?: number;
 };
@@ -80,6 +81,17 @@ export async function modelHealth(): Promise<ModelHealthStatus> {
     if (body?.status === "ok") return "ok";
     if (body?.status === "loading") return "loading";
     return "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
+export async function modelReadiness(): Promise<ModelReadinessStatus> {
+  try {
+    if (modelBackend() === "lambda") {
+      return appSecretConfig().modelLambdaFunctionName ? "configured" : "unavailable";
+    }
+    return await modelHealth();
   } catch {
     return "unavailable";
   }

@@ -82,4 +82,4 @@ same job/polling pattern or a dedicated queue.
 - typecheck and unit tests cover the new types and server build
 - product-flow verification creates a timeline through the async job endpoint
   and polls until the first real prediction is visible
-- deployed `/ready` reports the real model status before product verification
+- deployed `/ready` reports the real model boundary before product verification

@@ -62,5 +62,5 @@ update helper for the serverless model function after the stack exists.
 ## Verification
 
 - model runtime tests prove readiness is not claimed before warmup
-- deployed `/ready` returns `model=ok` against the model alias
+- deployed `/ready` reports the model boundary as configured
 - `npm run verify:product` passes against the deployed serverless URL

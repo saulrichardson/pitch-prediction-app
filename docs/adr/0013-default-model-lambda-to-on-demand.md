@@ -66,6 +66,6 @@ cap limits how many expensive model starts can occur at once.
 ## Verification
 
 - unit tests cover cold-start preparation messaging
-- deployed `/ready` must continue to report `model=ok`
+- deployed `/ready` must continue to report the model boundary as configured
 - product verification must pass against the custom domain after the web and
   model stack changes deploy

@@ -97,8 +97,8 @@ await step("public health and readiness endpoints respond", async () => {
   assert(ready.response.ok, "/ready should be healthy", ready.payload);
   assert(ready.payload.status === "ok", "/ready should report status ok", ready.payload);
   assert(["memory", "dynamodb", "postgres"].includes(ready.payload.storageMode), "/ready should report explicit storage mode", ready.payload);
-  assert(["ok", "unavailable"].includes(ready.payload.model), "/ready should report real model status", ready.payload);
-  assert(ready.payload.model === "ok", "product-flow verification requires the real model to be ready", ready.payload);
+  assert(["ok", "configured", "unavailable"].includes(ready.payload.model), "/ready should report real model status", ready.payload);
+  assert(["ok", "configured"].includes(ready.payload.model), "product-flow verification requires the real model boundary to be configured", ready.payload);
   return `model=${ready.payload.model}, storage=${ready.payload.storageMode}`;
 });
 

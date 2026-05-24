@@ -56,8 +56,9 @@ Prediction-producing flows fail visibly when:
 
 - the configured model backend is missing (`MODEL_BASE_URL` for HTTP mode or
   `MODEL_LAMBDA_FUNCTION_NAME` for Lambda mode)
-- `/ready` cannot validate the same server-side model credentials used for
-  prediction
+- HTTP-mode `/ready` cannot validate the same server-side model credentials used
+  for prediction
+- Lambda-mode `/ready` cannot find a configured model Lambda target
 - the model service is unhealthy or unavailable
 - the model service times out
 - authentication fails

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PredictionRequest } from "@pitch/domain";
-import { modelHealth, predictPitch } from "./model-service";
+import { modelHealth, modelReadiness, predictPitch } from "./model-service";
 
 const { lambdaSendMock } = vi.hoisted(() => ({
   lambdaSendMock: vi.fn()
@@ -118,6 +118,13 @@ describe("model service adapter", () => {
     });
 
     await expect(modelHealth()).resolves.toBe("ok");
+  });
+
+  it("reports Lambda model readiness from configuration without cold-starting the model", async () => {
+    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+
+    await expect(modelReadiness()).resolves.toBe("configured");
+    expect(lambdaSendMock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed serverless model Lambda responses", async () => {

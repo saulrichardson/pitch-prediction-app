@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { checkDynamoDb, getReadyDb, getStorageMode, type StorageMode } from "@pitch/db";
-import { modelHealth } from "@/lib/model-service";
+import { modelReadiness } from "@/lib/model-service";
 
 export async function GET() {
-  const model = await modelHealth();
+  const model = await modelReadiness();
   const storage = await storageHealth();
-  const ready = storage.status !== "unavailable" && model === "ok";
+  const ready = storage.status !== "unavailable" && model !== "unavailable";
 
   return NextResponse.json(
     {
