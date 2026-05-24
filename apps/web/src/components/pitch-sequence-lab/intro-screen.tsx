@@ -1,18 +1,34 @@
 import { Github, Loader2, Play, Radar, RotateCcw, ScanSearch } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { ClientTimelineStartJob } from "@pitch/domain";
+import { replayPreparationStatus } from "./preparation-status";
 
 export function IntroScreen({
   error,
   isHydrated,
   isLoading,
+  preparationJob,
   loadingMessage,
   onEnter
 }: {
   error?: string;
   isHydrated: boolean;
   isLoading: boolean;
+  preparationJob?: ClientTimelineStartJob;
   loadingMessage?: string;
   onEnter: () => void;
 }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const preparation = useMemo(() => isLoading
+    ? replayPreparationStatus({ job: preparationJob, message: loadingMessage, nowMs })
+    : null, [isLoading, loadingMessage, nowMs, preparationJob]);
+
+  useEffect(() => {
+    if (!isLoading) return undefined;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [isLoading]);
+
   return (
     <section className="intro-board">
       <div className="intro-hero" aria-labelledby="intro-title">
@@ -21,7 +37,7 @@ export function IntroScreen({
           <div className="intro-actions">
             <button className="btn btn-primary intro-enter" disabled={isLoading || !isHydrated} onClick={onEnter}>
               {isLoading ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
-              {isLoading ? loadingMessage ?? "Loading game" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
+              {isLoading ? "Preparing Replay" : isHydrated ? "Start Mets Replay" : "Preparing Replay"}
             </button>
             <a
               href="https://github.com/saulrichardson/pitch-prediction-app"
@@ -37,6 +53,26 @@ export function IntroScreen({
             </a>
           </div>
           {error ? <p className="intro-error">{error}</p> : null}
+          {preparation ? (
+            <div className="startup-console" aria-busy="true" aria-live="polite">
+              <div className="startup-console-header">
+                <div>
+                  <p className="small-label">Serverless Startup</p>
+                  <strong>{preparation.headline}</strong>
+                </div>
+                {preparation.elapsedLabel ? <span>{preparation.elapsedLabel}</span> : null}
+              </div>
+              <p>{preparation.detail}</p>
+              <ol className="startup-steps" aria-label="Replay preparation progress">
+                {preparation.steps.map((step) => (
+                  <li key={step.label} className={`startup-step startup-step-${step.state}`}>
+                    <span aria-hidden="true" />
+                    <strong>{step.label}</strong>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           <dl className="intro-facts" aria-label="Replay inputs and outputs">
             <div>
               <dt>Reads</dt>

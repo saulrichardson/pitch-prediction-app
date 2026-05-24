@@ -15,7 +15,7 @@ export class PitchSequenceModelStack extends cdk.Stack {
     const modelMemoryMb = numberFromEnv("MODEL_LAMBDA_MEMORY_MB", 4096);
     const modelTimeoutSeconds = numberFromEnv("MODEL_LAMBDA_TIMEOUT_SECONDS", 300);
     const modelReservedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_RESERVED_CONCURRENCY") ?? 2;
-    const modelProvisionedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_PROVISIONED_CONCURRENCY") ?? 1;
+    const modelProvisionedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_PROVISIONED_CONCURRENCY") ?? 0;
     const modelSampleSize = process.env.PITCHPREDICT_SAMPLE_SIZE ?? "8";
     const modelAlgorithm = process.env.PITCHPREDICT_ALGORITHM ?? "xlstm";
 

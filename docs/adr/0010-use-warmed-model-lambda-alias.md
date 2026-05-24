@@ -1,6 +1,6 @@
 # ADR: Use Warmed Model Lambda Alias
 
-- status: accepted
+- status: superseded by ADR 0013 for default provisioned concurrency
 - date: 2026-05-13
 - owners: project maintainers
 
@@ -18,18 +18,14 @@ look healthier than the next user action actually was.
 
 ## Decision
 
-Production deploys publish the model Lambda to a `live` alias, configure
-`PITCHPREDICT_WARM_ON_STARTUP=true`, and attach provisioned concurrency to that
-alias. The model Lambda uses a longer timeout and larger memory allocation for
-the warmup path so model download/load work happens during deployment instead
-of during the user's first replay request. The web stack invokes the alias
-target rather than unqualified `$LATEST`. After ADR 0012, the default
-serverless-native target is `pitch-sequence-serverless-model-lambda:live`.
+Production deploys publish the model Lambda to a `live` alias and configure
+`PITCHPREDICT_WARM_ON_STARTUP=true`. The web stack invokes the alias target
+rather than unqualified `$LATEST`. After ADR 0012, the default serverless-native
+target is `pitch-sequence-serverless-model-lambda:live`.
 
-The public deployment keeps one provisioned model environment for the normal
-single-user path and caps model reserved concurrency at two. That preserves a
-fast warm lane while allowing one cold overflow invocation for public discovery
-traffic without letting many expensive cold model loads fan out at once.
+This ADR originally required one provisioned model environment for the normal
+single-user path. ADR 0013 changes the default to on-demand Lambda with
+provisioned concurrency set only for explicit demo/review windows.
 
 The model runtime reports `loading` until warmup or a successful prediction has
 actually completed. It no longer marks itself ready immediately after building
@@ -54,12 +50,9 @@ now has a stable model target that can be warmed and rolled forward by version.
 
 ## Consequences
 
-The app gets a more reliable first replay start and a readiness check that
-reflects the real model. The tradeoff is a standing AWS cost for one
-provisioned model execution environment with enough memory and timeout
-headroom to load the xLSTM model. Users beyond the warm lane may wait in the
-async start state or receive a retryable model-busy response on later
-same-replay predictions.
+The app gets a stable alias target and a readiness check that reflects the real
+model. With ADR 0013, users may wait in the async start state while a cold model
+environment initializes, and the UI explains that serverless startup state.
 
 Future deploys must update the model alias before the web stack points traffic
 at it. `scripts/deploy-serverless-model.sh` owns the serverless-native model
@@ -69,5 +62,5 @@ update helper for the serverless model function after the stack exists.
 ## Verification
 
 - model runtime tests prove readiness is not claimed before warmup
-- deployed `/ready` returns `model=ok` against the warmed alias
+- deployed `/ready` returns `model=ok` against the model alias
 - `npm run verify:product` passes against the deployed serverless URL

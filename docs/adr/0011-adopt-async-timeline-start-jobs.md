@@ -7,10 +7,9 @@
 ## Context
 
 The app is now public-facing rather than only manually demoed. A user may arrive
-when the model Lambda is cold or when the single warmed model lane is occupied.
-CloudFront gives the web origin a 60 second read timeout, but a cold xLSTM model
-environment can take longer than that to download/load the public model and
-produce the first prediction.
+when the model Lambda is cold. CloudFront gives the web origin a 60 second read
+timeout, but a cold xLSTM model environment can take longer than that to
+download/load the public model and produce the first prediction.
 
 The product requirement is still that the app uses real model predictions. A
 mock or cached substitute prediction would make the first replay look fast but
@@ -44,9 +43,9 @@ is warming instead of watching a request hang or fail at CloudFront. The existin
 `Timeline` domain contract stays clean: a timeline still means there is already
 a current prediction. The new job object owns only the preparation lifecycle.
 
-Keeping one provisioned model lane preserves speed for the normal one-off demo,
-while reserved model concurrency of two allows one capped cold overflow for
-organic public traffic.
+ADR 0013 later changed the default cost posture to on-demand model Lambda.
+Reserved model concurrency of two still caps expensive cold starts for organic
+public traffic.
 
 ## Alternatives Considered
 

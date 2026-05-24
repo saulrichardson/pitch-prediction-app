@@ -56,6 +56,22 @@ remain alive only as a redirect to the serverless version.
 5. Retire the old App Runner-era stack only after the new model stack is healthy
    and the web Lambda is invoking the new model alias.
 
+## Cost Posture
+
+The default serverless model stack uses `MODEL_LAMBDA_PROVISIONED_CONCURRENCY=0`.
+That keeps the model Lambda on demand so idle periods do not reserve a 4 GB warm
+environment. The first prediction after a long idle period can take about a
+minute while the model container initializes.
+
+For a scheduled demo, temporarily deploy the model stack with:
+
+```bash
+MODEL_LAMBDA_PROVISIONED_CONCURRENCY=1 scripts/deploy-serverless-model.sh
+```
+
+After the demo, redeploy without the override to return to the low-idle-cost
+mode.
+
 ## Do Not Delete Early
 
 Do not delete `PitchSequenceLabStack` until the model cutover is complete. Before

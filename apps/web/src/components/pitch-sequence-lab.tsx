@@ -100,7 +100,7 @@ export default function PitchPredictionApp() {
   }, [waitingJobId, waitingGame]);
 
   async function loadMetsGame() {
-    await run("Loading latest Mets game", async () => {
+    await run("Loading latest game and pitch feed", async () => {
       const latest = await getJson<{ game: GameSummary }>("/api/games/mets/latest");
       await getJson(`/api/games/${latest.game.gamePk}/replay`);
       const created = await postJson<{ job: ClientTimelineStartJob; timeline?: ClientTimeline }>("/api/timeline-jobs", { gamePk: latest.game.gamePk });
@@ -190,6 +190,7 @@ export default function PitchPredictionApp() {
           isHydrated={isHydrated}
           isLoading={state.status === "loading" || state.status === "waiting"}
           loadingMessage={state.status === "loading" || state.status === "waiting" ? state.message : undefined}
+          preparationJob={state.status === "waiting" ? state.job : undefined}
           onEnter={loadMetsGame}
         />
       </main>
@@ -281,9 +282,9 @@ export default function PitchPredictionApp() {
 
 function timelineJobMessage(job: ClientTimelineStartJob) {
   if (job.status === "pending") return "Queueing replay start";
-  if (job.status === "running") return "Warming the real model";
+  if (job.status === "running") return "Starting the real model";
   if (job.status === "succeeded") return "Opening replay";
-  return "Model warmup failed";
+  return "Model start failed";
 }
 
 function timelineJobErrorMessage(job: ClientTimelineStartJob) {

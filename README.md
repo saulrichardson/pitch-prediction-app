@@ -106,7 +106,7 @@ The canonical demo is a cost-conscious AWS serverless deployment:
 - frontend and API: Next.js App Router, React, TypeScript, and Next.js API routes
 - web runtime: Next.js standalone server running in AWS Lambda through Lambda Web Adapter
 - model runtime: separate Python/FastAPI model service deployed as an AWS Lambda container
-- model ownership: dedicated `PitchSequenceModelStack` with a warmed `live` alias
+- model ownership: dedicated `PitchSequenceModelStack` with an on-demand `live` alias
 - state: DynamoDB for deployed demo storage
 - secrets: AWS Secrets Manager
 - packaging: Amazon ECR container images

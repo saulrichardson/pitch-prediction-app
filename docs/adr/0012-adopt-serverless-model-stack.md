@@ -28,7 +28,7 @@ runtime:
 
 - `pitch-sequence-serverless-model-lambda`
 - `live` alias
-- provisioned concurrency for the warm model lane
+- optional provisioned concurrency for explicit warm demo windows
 - reserved concurrency cap
 - model Lambda log group
 - model Lambda IAM role
@@ -80,8 +80,9 @@ The old model Lambda, old App Runner redirect service, and old stack can be
 deleted after the transition window. Until then, App Runner remains alive only
 to redirect to the serverless version.
 
-The standing cost after cleanup is dominated by the new model Lambda provisioned
-concurrency, not App Runner.
+After ADR 0013, the default model stack uses on-demand Lambda with provisioned
+concurrency disabled. The first request after idle can cold start the model, but
+the main idle provisioned-concurrency cost is removed.
 
 ## Verification
 

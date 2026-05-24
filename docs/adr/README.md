@@ -39,9 +39,12 @@ Use `docs/templates/adr.md` as the starting point.
 - `0009-remove-archived-scenario-api-surface.md`: removes branch/manual
   scenario behavior from the active v1 web/API/domain surface.
 - `0010-use-warmed-model-lambda-alias.md`: routes production model invokes to a
-  warmed `live` Lambda alias with provisioned concurrency.
+  stable `live` Lambda alias; superseded by ADR 0013 for default provisioned
+  concurrency.
 - `0011-adopt-async-timeline-start-jobs.md`: creates replay timelines through a
   durable async start job so public cold starts show a waiting state instead of
   timing out behind CloudFront.
 - `0012-adopt-serverless-model-stack.md`: gives the model Lambda its own
   serverless-native stack so the old App Runner-era stack can be retired.
+- `0013-default-model-lambda-to-on-demand.md`: disables model provisioned
+  concurrency by default and accepts a visible cold-start waiting state.
