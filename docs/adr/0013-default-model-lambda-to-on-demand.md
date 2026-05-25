@@ -35,6 +35,7 @@ Keep:
 - the `live` alias as the stable model invoke target
 - `PITCHPREDICT_WARM_ON_STARTUP=true` so readiness and health still reflect the
   real model when an environment initializes
+- the model Lambda at `x86_64` and `1024 MB` by default
 - reserved concurrency at `2` to cap expensive model fan-out
 - async timeline start jobs and polling as the product-facing waiting boundary
 
@@ -51,6 +52,13 @@ The app is low traffic and cost-sensitive. Paying continuously for one warm
 model environment is not justified when the product can tolerate a first-request
 cold start and explain it clearly. On-demand Lambda preserves the serverless
 operating model and removes the main idle cost.
+
+The tested low-cost floor is the existing x86 model image at `1024 MB`.
+Benchmark deploys below that either left too little memory headroom (`768 MB`)
+or sometimes moved into Lambda's slower init-timeout path (`832 MB`, `928 MB`),
+which made wall-clock latency and observed GB-seconds worse. ARM64 was
+functionally compatible, but the tested memory settings did not beat x86 1024
+for this model's cold-start behavior.
 
 ## Consequences
 
@@ -69,3 +77,5 @@ cap limits how many expensive model starts can occur at once.
 - deployed `/ready` must continue to report the model boundary as configured
 - product verification must pass against the custom domain after the web and
   model stack changes deploy
+- cost-path verification should confirm provisioned concurrency is absent and
+  `pitch-sequence-serverless-model-lambda:live` is deployed at x86_64 / 1024 MB

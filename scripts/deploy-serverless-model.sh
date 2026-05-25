@@ -8,14 +8,28 @@ export AWS_REGION AWS_DEFAULT_REGION
 MODEL_ECR_REPOSITORY_NAME="${MODEL_ECR_REPOSITORY_NAME:-pitch-prediction-model-api}"
 MODEL_LAMBDA_FUNCTION_NAME="${MODEL_LAMBDA_FUNCTION_NAME:-pitch-sequence-serverless-model-lambda}"
 MODEL_LAMBDA_ALIAS="${MODEL_LAMBDA_ALIAS:-live}"
+MODEL_LAMBDA_ARCHITECTURE="${MODEL_LAMBDA_ARCHITECTURE:-x86_64}"
 MODEL_LAMBDA_PROVISIONED_CONCURRENCY="${MODEL_LAMBDA_PROVISIONED_CONCURRENCY:-0}"
 MODEL_LAMBDA_RESERVED_CONCURRENCY="${MODEL_LAMBDA_RESERVED_CONCURRENCY:-2}"
 MODEL_LAMBDA_TIMEOUT_SECONDS="${MODEL_LAMBDA_TIMEOUT_SECONDS:-300}"
-MODEL_LAMBDA_MEMORY_MB="${MODEL_LAMBDA_MEMORY_MB:-4096}"
+MODEL_LAMBDA_MEMORY_MB="${MODEL_LAMBDA_MEMORY_MB:-1024}"
 MODEL_IMAGE_TAG="${MODEL_IMAGE_TAG:-model-serverless-$(git rev-parse --short=12 HEAD)}"
 export MODEL_ECR_REPOSITORY_NAME MODEL_LAMBDA_FUNCTION_NAME MODEL_LAMBDA_ALIAS
-export MODEL_LAMBDA_PROVISIONED_CONCURRENCY MODEL_LAMBDA_RESERVED_CONCURRENCY
+export MODEL_LAMBDA_ARCHITECTURE MODEL_LAMBDA_PROVISIONED_CONCURRENCY MODEL_LAMBDA_RESERVED_CONCURRENCY
 export MODEL_LAMBDA_TIMEOUT_SECONDS MODEL_LAMBDA_MEMORY_MB MODEL_IMAGE_TAG
+
+case "${MODEL_LAMBDA_ARCHITECTURE}" in
+  x86_64 | amd64)
+    docker_platform="linux/amd64"
+    ;;
+  arm64 | arm_64 | aarch64)
+    docker_platform="linux/arm64"
+    ;;
+  *)
+    echo "MODEL_LAMBDA_ARCHITECTURE must be x86_64 or arm64." >&2
+    exit 1
+    ;;
+esac
 
 account_id="$(aws sts get-caller-identity --query Account --output text)"
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -35,7 +49,7 @@ aws ecr get-login-password --region "${AWS_REGION}" \
   | docker login --username AWS --password-stdin "${registry}" >/dev/null
 
 docker buildx build \
-  --platform linux/amd64 \
+  --platform "${docker_platform}" \
   --provenance=false \
   -f services/model-api/Dockerfile.lambda \
   -t "${image_uri}" \

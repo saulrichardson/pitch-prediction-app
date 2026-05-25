@@ -12,7 +12,8 @@ export class PitchSequenceModelStack extends cdk.Stack {
     const modelImageTag = process.env.MODEL_IMAGE_TAG ?? "model-serverless-latest";
     const modelFunctionName = process.env.MODEL_LAMBDA_FUNCTION_NAME ?? "pitch-sequence-serverless-model-lambda";
     const modelAliasName = process.env.MODEL_LAMBDA_ALIAS ?? "live";
-    const modelMemoryMb = numberFromEnv("MODEL_LAMBDA_MEMORY_MB", 4096);
+    const modelArchitecture = architectureFromEnv(process.env.MODEL_LAMBDA_ARCHITECTURE ?? "x86_64");
+    const modelMemoryMb = numberFromEnv("MODEL_LAMBDA_MEMORY_MB", 1024);
     const modelTimeoutSeconds = numberFromEnv("MODEL_LAMBDA_TIMEOUT_SECONDS", 300);
     const modelReservedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_RESERVED_CONCURRENCY") ?? 2;
     const modelProvisionedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_PROVISIONED_CONCURRENCY") ?? 0;
@@ -30,7 +31,7 @@ export class PitchSequenceModelStack extends cdk.Stack {
     const modelFunction = new lambda.DockerImageFunction(this, "ModelFunction", {
       functionName: modelFunctionName,
       code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: modelImageTag }),
-      architecture: lambda.Architecture.X86_64,
+      architecture: modelArchitecture,
       memorySize: modelMemoryMb,
       timeout: cdk.Duration.seconds(modelTimeoutSeconds),
       reservedConcurrentExecutions: modelReservedConcurrency,
@@ -93,4 +94,15 @@ function optionalNumberFromEnv(name: string): number | undefined {
     throw new Error(`${name} must be a number.`);
   }
   return value;
+}
+
+function architectureFromEnv(raw: string): lambda.Architecture {
+  const value = raw.trim().toLowerCase();
+  if (value === "x86_64" || value === "amd64") {
+    return lambda.Architecture.X86_64;
+  }
+  if (value === "arm64" || value === "arm_64" || value === "aarch64") {
+    return lambda.Architecture.ARM_64;
+  }
+  throw new Error("MODEL_LAMBDA_ARCHITECTURE must be x86_64 or arm64.");
 }

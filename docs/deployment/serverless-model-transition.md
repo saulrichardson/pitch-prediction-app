@@ -59,9 +59,19 @@ remain alive only as a redirect to the serverless version.
 ## Cost Posture
 
 The default serverless model stack uses `MODEL_LAMBDA_PROVISIONED_CONCURRENCY=0`.
-That keeps the model Lambda on demand so idle periods do not reserve a 4 GB warm
-environment. The first prediction after a long idle period can take about a
-minute while the model container initializes.
+That keeps the model Lambda on demand so idle periods do not reserve a warm
+environment. The default model Lambda configuration is `x86_64`, `1024 MB`,
+reserved concurrency `2`, and no provisioned concurrency.
+
+Cost-path tests on 2026-05-24 showed `1024 MB` as the lowest clean production
+default. Lower x86 memory sizes can work, but `768 MB` leaves little memory
+headroom and `832 MB` / `928 MB` can fall into Lambda's slower init-timeout
+path. ARM64 builds and runs, but the tested ARM64 settings did not reduce the
+observed cold-start GB-seconds for this model.
+
+The first prediction after a long idle period can still take several seconds
+while the model container initializes. The product UI should keep exposing that
+serverless startup state instead of hiding it behind a generic loading message.
 
 For a scheduled demo, temporarily deploy the model stack with:
 
