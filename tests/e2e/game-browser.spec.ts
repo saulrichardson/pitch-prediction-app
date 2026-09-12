@@ -140,9 +140,11 @@ test("shows seven days, empty dates, doubleheaders, and unselectable live games 
     }),
   ).toBeVisible();
   await page.goto("/?browse=1&date=not-a-date");
-  await expect(page.getByRole("alert")).toContainText(
-    "Choose a date from the last seven days.",
-  );
+  await expect(
+    page
+      .getByRole("region", { name: "Game browser", exact: true })
+      .getByRole("alert"),
+  ).toContainText("Choose a date from the last seven days.");
   await page
     .getByRole("button", { name: "Show this week", exact: true })
     .click();

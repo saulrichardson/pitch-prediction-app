@@ -115,8 +115,9 @@ calibration require a separate evaluation across held-out games.
 Featured publication is operator-driven. Game preparation is requested by the
 user and delivered through the existing table's stream; there is no scheduler.
 The preparation worker has concurrency 1, a 540-second timeout, and one-day
-logs. It can invoke the model and access preparation/edition keys, but cannot
-read or write workspace sessions or the featured pointer. A failed new edition leaves the last good edition available;
+logs. It can invoke the model; its direct item permissions are restricted to
+preparation and edition keys. The stream mapping delivers only queued job
+images. A failed new edition leaves the last good edition available;
 feature age is visible through the game date. Run the CLI with an immutable
 model version/checkpoint and retain the review JSON.
 

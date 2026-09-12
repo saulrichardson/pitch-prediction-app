@@ -26,10 +26,15 @@ model alias once to an immutable version and image digest and retains that
 identity on retries. Each validated forecast is saved before progress advances.
 
 The worker indexes a complete immutable edition in `game-edition:<gamePk>` and
-the small `catalog-editions:<date>` summary map. It cannot access `featured` or
-workspace session keys. The web role still cannot invoke the model. This keeps
+the small `catalog-editions:<date>` summary map. Its direct item permissions
+exclude `featured` and workspace session keys. The web role still cannot invoke
+the model. This keeps
 preparation separate from replay navigation and operator feature selection.
 The date summary avoids reading every large prediction payload on each list.
+Stream reader IAM is scoped to the table's stream, which also contains other
+record images; the event-source filter delivers only queued game jobs to the
+handler. This filter is an event-delivery boundary, not a separate storage or
+IAM boundary.
 
 The public path and operator CLI share the existing 20-attempt daily and
 400-attempt monthly budget. These are UTC windows; failed attempts count.
