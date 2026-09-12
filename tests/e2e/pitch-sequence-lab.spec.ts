@@ -22,7 +22,9 @@ test("a complete replay stays stable through reveal, navigation, refresh and res
   expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
   await page.getByRole("button", { name: "Back one replay step" }).click();
   await expect(primary).toBeVisible();
-  await expect(page.locator(".forecast")).toHaveText(forecast);
+  await expect(page.locator(".forecast")).toHaveText(forecast, {
+    useInnerText: true,
+  });
   await primary.click();
   await next.click();
   await expect(page.locator(".pitch-progress")).toContainText("2");
@@ -38,7 +40,9 @@ test("a complete replay stays stable through reveal, navigation, refresh and res
   await expect(page.getByRole("heading", { name: "Strikeout" })).toBeVisible();
   await page.getByRole("button", { name: "Replay again" }).click();
   await expect(primary).toBeVisible();
-  await expect(page.locator(".forecast")).toHaveText(forecast);
+  await expect(page.locator(".forecast")).toHaveText(forecast, {
+    useInnerText: true,
+  });
 });
 
 test("the forecast reveals detail on demand without horizontal overflow", async ({
