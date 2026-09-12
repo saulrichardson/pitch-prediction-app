@@ -139,6 +139,8 @@ loaded from the filesystem in a production web process. Test-file loading and
 real-model generation are separate verification paths.
 
 The [delivery runbook](records/2026-09-12-prepared-replay-delivery.md) defines the
-model-contract-first cutover, publication checks, web rollout, and rollback.
+model contract cutover, reviewed-edition bootstrap, publication checks, web
+rollout, and rollback. The [September 12 production receipt](records/2026-09-12-production-release.md)
+records the deployed images, real AWS edition, CI results, and live verification.
 Older records describe prior architectures; the prepared-replay record supersedes
 the async timeline job model for the active product.

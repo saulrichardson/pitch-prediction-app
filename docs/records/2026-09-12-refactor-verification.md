@@ -1,8 +1,8 @@
 # Prepared Replay Refactor Verification
 
 - date: 2026-09-12
-- status: implemented and verified locally; not deployed
-- branch: `codex/replay-experience-refactor`
+- status: historical local verification; subsequently [deployed and verified](2026-09-12-production-release.md)
+- original branch: `codex/replay-experience-refactor` (now integrated into `main` and removed)
 - decision and rollout: [prepared replay delivery](2026-09-12-prepared-replay-delivery.md)
 - baseline: [September 11 production audit](2026-09-11-product-experience-audit.md)
 
@@ -111,6 +111,11 @@ executed in this session. Browser evidence above is from direct interaction,
 not a claimed automated-suite result.
 
 ## Delivery Boundary
+
+This section describes the boundary at the end of the initial implementation.
+The subsequent [production release](2026-09-12-production-release.md) completed
+deployment, publication, CI browser tests, live checks, commit/push, and branch
+cleanup. The local preview and disposable database are now stopped.
 
 No production deployment, migration, publication, or configuration change was
 performed. The local preview is `http://127.0.0.1:3000`, backed by disposable

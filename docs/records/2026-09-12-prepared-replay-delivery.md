@@ -1,7 +1,7 @@
 # Prepared Replay Refactor And Delivery
 
 - date: 2026-09-12
-- status: implemented locally; production cutover requires the steps below
+- status: deployed and verified in production; see the [release receipt](2026-09-12-production-release.md)
 - supersedes: async timeline-start jobs and per-click inference in the active web product
 
 ## Context
@@ -115,6 +115,8 @@ The reviewed edition uses checkpoint
 `97a87376621182e14cbd9c5b6c21077189b7df64`, normalizer revision `v3`, and eight
 samples per pitch. Fixture-driven tests are explicitly separate from this run.
 
-Production latency, IAM/OAC behavior, model image startup, and DynamoDB service
-behavior still require post-deployment verification. PostgreSQL migrations and
-conditional writes passed locally against a disposable real database.
+Production latency, IAM/OAC behavior, model image startup, DynamoDB service
+behavior, and the live browser passed the subsequent
+[production release checks](2026-09-12-production-release.md). PostgreSQL
+migrations and conditional writes also passed against disposable real databases
+locally and in CI.
