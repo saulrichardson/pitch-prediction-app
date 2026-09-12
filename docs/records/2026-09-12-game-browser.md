@@ -97,3 +97,40 @@ subject to complete MLB pitch data and the shared preparation budget. Revisit
 capacity explicitly before promising instant access to every unprepared game.
 Expanding to full-game replay requires a new selection and navigation model;
 do not hide that product change inside the existing at-bat picker.
+
+## First AWS verification
+
+The initial rollout at application commit `82a80146ba054509d90645b2abf329831b72aa84`
+completed successfully. Its [CI run](https://github.com/saulrichardson/pitch-prediction-app/actions/runs/34721322784)
+passed 76 TypeScript tests including PostgreSQL, 22 Python tests, and 18 browser
+checks. A browser-test locator initially matched Next.js's route announcer as
+well as the catalog error; scoping it to the named game-browser region fixed
+the assertion without weakening the checked error or recovery behavior.
+
+The live picker returned 91 games across September 6–12, with current live and
+pregame states disabled and no final scores. Both HTTP smoke suites passed;
+the six sampled replay commands took 84–137 ms (median 93 ms). These are smoke
+measurements, not a load test.
+
+The production browser selected September 11's PIT @ CHC game `824631` and
+queued request `d34c76c9-f0f5-4d33-8e7d-38b6b7ff7fb2`. The DynamoDB stream worker
+prepared all six pitches, using immutable model version 12 and image digest
+`sha256:9e4bfd6d4c008788612e01fd586857b39900f77b5a34d208e1d884f46859ea4e`.
+It saved edition `37aa461a76ab0f69624412f58b1e7c5b5acfb656a8ec5a5dd5408e10b7691101`.
+Preparation ran from 22:02:19.392Z to 22:03:59.076Z. The browser showed progress
+after refresh and opened automatically when complete. The 390-pixel phone
+layout had no horizontal overflow.
+
+Switching to the September 12 Mets game and back preserved the exact second
+Pirates forecast. All remaining pitches completed in the live browser. The
+model-attempt counter rose from 3 to 9 during preparation and stayed at 9 after
+reopening and navigating. The featured pointer remained unchanged. The reviewed
+edition, rollback configuration, build/deployment output, and verification logs
+are retained in ignored `.cache/release-game-browser-2026-09-12/`; configuration
+receipts are private and must not be committed.
+
+The observed roughly 100-second first preparation informed the final action
+labels: **Prepare replay** for an unprepared game, **Preparing** while selected
+work is active, and **Ready** for a saved edition. Do not imply that first-time
+inference is instantaneous. Invalid selected-game links show their actual
+validation message and provide a route back to the game list.

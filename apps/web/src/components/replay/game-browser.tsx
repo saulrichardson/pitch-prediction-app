@@ -7,7 +7,7 @@ import {
   type GameAvailability,
   type GameCatalog,
 } from "@pitch/domain";
-import { requestJson } from "./api";
+import { ReplayApiError, requestJson } from "./api";
 
 const dateLabel = (date: string, style: "short" | "full" = "short") =>
   gameDateSchema.safeParse(date).success
@@ -126,10 +126,12 @@ export function GameBrowser({
           result.replay.status === "preparing"
         )
           timer = setTimeout(poll, 2500);
-      } catch {
+      } catch (error) {
         if (!controller.signal.aborted)
           setSelectionError(
-            "Connection interrupted. Preparation continues. Try again to check it.",
+            error instanceof ReplayApiError && error.status < 500
+              ? error.message
+              : "Connection interrupted. Preparation continues. Try again to check it.",
           );
       }
     };
@@ -379,57 +381,73 @@ export function GameBrowser({
         </div>
       ) : (
         <div className="game-list">
-          {catalog?.games.map((game) => (
-            <button
-              className={`game-row ${gamePk === game.gamePk ? "is-selected" : ""}`}
-              key={game.gamePk}
-              disabled={game.status !== "complete" || busy || requesting}
-              aria-label={`${game.away.name} at ${game.home.name}${game.doubleheader ? `, game ${game.gameNumber}` : ""}${game.status === "complete" ? ", open replay" : `, ${game.statusLabel}`}`}
-              onClick={() =>
-                game.replay.status === "ready"
-                  ? onOpen(game.replay.edition.id)
-                  : request(game)
-              }
-            >
-              <span className="game-teams">
-                <span>
-                  <b>{game.away.abbreviation}</b>
-                  <span>{game.away.name}</span>
+          {catalog?.games.map((game) => {
+            const availability =
+              gamePk === game.gamePk && selected
+                ? selected.replay
+                : game.replay;
+            const activePreparation =
+              availability.status === "preparing" ||
+              availability.status === "queued";
+            const action =
+              availability.status === "ready"
+                ? "open replay"
+                : activePreparation
+                  ? "view preparation"
+                  : "prepare replay";
+            return (
+              <button
+                className={`game-row ${gamePk === game.gamePk ? "is-selected" : ""}`}
+                key={game.gamePk}
+                disabled={game.status !== "complete" || busy || requesting}
+                aria-label={`${game.away.name} at ${game.home.name}${game.doubleheader ? `, game ${game.gameNumber}` : ""}, ${game.status === "complete" ? action : game.statusLabel}`}
+                onClick={() =>
+                  game.replay.status === "ready"
+                    ? onOpen(game.replay.edition.id)
+                    : request(game)
+                }
+              >
+                <span className="game-teams">
+                  <span>
+                    <b>{game.away.abbreviation}</b>
+                    <span>{game.away.name}</span>
+                  </span>
+                  <span>
+                    <b>{game.home.abbreviation}</b>
+                    <span>{game.home.name}</span>
+                  </span>
                 </span>
-                <span>
-                  <b>{game.home.abbreviation}</b>
-                  <span>{game.home.name}</span>
+                <span className="game-row-detail">
+                  {game.doubleheader ? (
+                    <span>Game {game.gameNumber}</span>
+                  ) : null}
+                  <span>
+                    {game.status === "complete" ? "Final" : game.statusLabel}
+                  </span>
                 </span>
-              </span>
-              <span className="game-row-detail">
-                {game.doubleheader ? <span>Game {game.gameNumber}</span> : null}
-                <span>
-                  {game.status === "complete" ? "Final" : game.statusLabel}
+                <span className="game-row-action">
+                  {game.status === "complete" ? (
+                    <>
+                      {availability.status === "ready" ? (
+                        <>
+                          <Check size={14} />
+                          <span>Ready</span>
+                        </>
+                      ) : activePreparation ? (
+                        <>
+                          <LoaderCircle className="spinner" size={14} />
+                          <span>Preparing</span>
+                        </>
+                      ) : (
+                        <span>Prepare replay</span>
+                      )}
+                      <ArrowRight size={17} />
+                    </>
+                  ) : null}
                 </span>
-              </span>
-              <span className="game-row-action">
-                {game.status === "complete" ? (
-                  <>
-                    {game.replay.status === "ready" ? (
-                      <>
-                        <Check size={14} />
-                        <span>Ready</span>
-                      </>
-                    ) : game.replay.status === "preparing" ||
-                      game.replay.status === "queued" ? (
-                      <>
-                        <LoaderCircle className="spinner" size={14} />
-                        <span>Preparing</span>
-                      </>
-                    ) : (
-                      <span>Open replay</span>
-                    )}
-                    <ArrowRight size={17} />
-                  </>
-                ) : null}
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </section>

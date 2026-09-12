@@ -163,5 +163,7 @@ The [delivery runbook](records/2026-09-12-prepared-replay-delivery.md) defines t
 model contract cutover, reviewed-edition bootstrap, publication checks, web
 rollout, and rollback. The [September 12 production receipt](records/2026-09-12-production-release.md)
 records the deployed images, real AWS edition, CI results, and live verification.
+The [game-browser record](records/2026-09-12-game-browser.md) records the later
+stream-worker rollout and real all-team preparation verification.
 Older records describe prior architectures; the prepared-replay record supersedes
 the async timeline job model for the active product.

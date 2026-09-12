@@ -115,7 +115,7 @@ test("shows seven days, empty dates, doubleheaders, and unselectable live games 
   ).toBeDisabled();
   await expect(
     page.getByRole("button", {
-      name: "Seattle Mariners at Los Angeles Dodgers, game 2, open replay",
+      name: "Seattle Mariners at Los Angeles Dodgers, game 2, prepare replay",
       exact: true,
     }),
   ).toBeEnabled();
@@ -149,6 +149,16 @@ test("shows seven days, empty dates, doubleheaders, and unselectable live games 
     .getByRole("button", { name: "Show this week", exact: true })
     .click();
   await expect(page.locator(".date-strip button")).toHaveCount(7);
+  await page.goto("/?browse=1&game=not-a-game");
+  await expect(
+    page.getByRole("region", { name: "Selected game", exact: true }),
+  ).toContainText("Choose a listed MLB game.");
+  await page
+    .getByRole("button", { name: "Back to games", exact: true })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Selected game", exact: true }),
+  ).not.toBeVisible();
 });
 
 test("shows durable preparation progress across refresh and opens the completed replay", async ({
@@ -189,12 +199,18 @@ test("shows durable preparation progress across refresh and opens the completed 
   await page.goto("/?browse=1");
   await page
     .getByRole("button", {
-      name: "Seattle Mariners at Los Angeles Dodgers, open replay",
+      name: "Seattle Mariners at Los Angeles Dodgers, prepare replay",
       exact: true,
     })
     .click();
   await expect(
     page.getByText("Preparing pitch 2 of 4.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Seattle Mariners at Los Angeles Dodgers, view preparation",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.reload();
   await expect(
