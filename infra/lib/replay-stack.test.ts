@@ -11,8 +11,14 @@ describe("prepared replay web infrastructure", () => {
       { env: { account: "123456789012", region: "us-east-1" } },
     );
     const template = Template.fromStack(stack);
-    const policies = JSON.stringify(template.findResources("AWS::IAM::Policy"));
-    expect(policies).not.toContain("lambda:InvokeFunction");
+    const policies = template.findResources("AWS::IAM::Policy");
+    const webPolicies = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(policies).filter(([id]) => id.startsWith("WebFunction")),
+      ),
+    );
+    expect(webPolicies).toContain("dynamodb:GetItem");
+    expect(webPolicies).not.toContain("lambda:InvokeFunction");
     template.hasResourceProperties("AWS::Lambda::Function", {
       Timeout: 30,
       Environment: { Variables: { STORAGE_MODE: "dynamodb" } },
@@ -21,8 +27,29 @@ describe("prepared replay web infrastructure", () => {
       template.findResources("AWS::CloudFront::Function"),
     );
     expect(functions).toContain("x-forwarded-host");
-    expect(
-      JSON.stringify(template.findResources("AWS::Lambda::Function")),
-    ).not.toContain("MODEL_BACKEND");
+    template.hasResourceProperties("AWS::DynamoDB::Table", {
+      StreamSpecification: { StreamViewType: "NEW_IMAGE" },
+    });
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      FunctionName: "pitch-sequence-game-preparation",
+      Timeout: 540,
+      ReservedConcurrentExecutions: 1,
+    });
+    const mappings = JSON.stringify(
+      template.findResources("AWS::Lambda::EventSourceMapping"),
+    );
+    expect(mappings).toContain("game-job:");
+    expect(mappings).toContain("queued");
+    expect(mappings).not.toContain("session:");
+    const workerPolicies = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(policies).filter(([id]) =>
+          id.startsWith("PrepareGameFunction"),
+        ),
+      ),
+    );
+    expect(workerPolicies).toContain("dynamodb:LeadingKeys");
+    expect(workerPolicies).not.toContain("REPLAY#session:");
+    expect(workerPolicies).not.toContain("REPLAY#featured");
   });
 });

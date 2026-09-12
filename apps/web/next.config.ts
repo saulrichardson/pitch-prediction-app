@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   },
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../.."),
-  transpilePackages: ["@pitch/domain", "@pitch/db"],
+  transpilePackages: ["@pitch/domain", "@pitch/db", "@pitch/workflows"],
 };
 
 export default nextConfig;

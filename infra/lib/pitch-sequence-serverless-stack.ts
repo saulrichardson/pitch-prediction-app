@@ -7,6 +7,9 @@ import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as lambdaNode from "aws-cdk-lib/aws-lambda-nodejs";
+import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import path from "node:path";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 
@@ -53,6 +56,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       timeToLiveAttribute: "expiresAt",
+      stream: dynamodb.StreamViewType.NEW_IMAGE,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     const tableResource = table.node.defaultChild as dynamodb.CfnTable;
@@ -97,6 +101,85 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     });
 
     table.grantReadWriteData(webFunction);
+
+    const preparationLogs = new logs.LogGroup(this, "PreparationLogGroup", {
+      logGroupName: "/aws/lambda/pitch-sequence-game-preparation",
+      retention: logs.RetentionDays.ONE_DAY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    const modelName = "pitch-sequence-serverless-model-lambda";
+    const prepareFunction = new lambdaNode.NodejsFunction(
+      this,
+      "PrepareGameFunction",
+      {
+        functionName: "pitch-sequence-game-preparation",
+        entry: path.resolve(
+          import.meta.dirname,
+          "../functions/prepare-game.ts",
+        ),
+        depsLockFilePath: path.resolve(
+          import.meta.dirname,
+          "../../package-lock.json",
+        ),
+        runtime: lambda.Runtime.NODEJS_24_X,
+        architecture: lambda.Architecture.ARM_64,
+        memorySize: 512,
+        timeout: cdk.Duration.seconds(540),
+        reservedConcurrentExecutions: 1,
+        logGroup: preparationLogs,
+        bundling: { externalModules: [], target: "node24", minify: true },
+        environment: {
+          STORAGE_MODE: "dynamodb",
+          DYNAMODB_TABLE_NAME: table.tableName,
+          MODEL_INVOKE_TARGET: `${modelName}:live`,
+        },
+      },
+    );
+    prepareFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["dynamodb:GetItem", "dynamodb:PutItem"],
+        resources: [table.tableArn],
+        conditions: {
+          "ForAllValues:StringLike": {
+            "dynamodb:LeadingKeys": [
+              "REPLAY#game-job:*",
+              "REPLAY#edition:*",
+              "REPLAY#game-edition:*",
+              "REPLAY#catalog-editions:*",
+              "REPLAY#forecast:*",
+              "REPLAY#preparation-lock:*",
+              "REPLAY#preparation-budget:*",
+            ],
+          },
+        },
+      }),
+    );
+    prepareFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["lambda:GetFunction", "lambda:InvokeFunction"],
+        resources: [
+          `arn:${this.partition}:lambda:${this.region}:${this.account}:function:${modelName}:*`,
+        ],
+      }),
+    );
+    prepareFunction.addEventSource(
+      new eventSources.DynamoEventSource(table, {
+        startingPosition: lambda.StartingPosition.TRIM_HORIZON,
+        batchSize: 1,
+        retryAttempts: 2,
+        maxRecordAge: cdk.Duration.hours(1),
+        filters: [
+          lambda.FilterCriteria.filter({
+            dynamodb: {
+              NewImage: {
+                key: { S: lambda.FilterRule.beginsWith("game-job:") },
+                value: { M: { status: { S: ["queued"] } } },
+              },
+            },
+          }),
+        ],
+      }),
+    );
     const functionUrl = webFunction.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });

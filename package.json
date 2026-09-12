@@ -20,6 +20,7 @@
     "db:migrate": "npm --workspace @pitch/db run db:migrate",
     "infra:synth": "npm --workspace @pitch/infra run synth",
     "verify:product": "node scripts/verify-product-flows.mjs",
+    "verify:catalog": "node scripts/verify-game-catalog.mjs",
     "prepare:replay": "node --import tsx scripts/prepare-replay.ts",
     "fixture:replay": "node --import tsx scripts/write-test-edition.ts",
     "verify:local": "node scripts/verify-local.mjs",

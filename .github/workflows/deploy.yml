@@ -124,4 +124,6 @@ jobs:
       - name: Verify serverless product flow
         env:
           BASE_URL: ${{ steps.app-url.outputs.url }}
-        run: npm run verify:product
+        run: |
+          npm run verify:product
+          npm run verify:catalog

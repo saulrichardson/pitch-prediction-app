@@ -7,10 +7,11 @@ import { unresolvedCommand, type PendingCommand } from "./pending-command";
 type Screen =
   | { kind: "loading" }
   | { kind: "intro"; edition: EditionSummary }
+  | { kind: "browse"; date: string | null; gamePk: string | null }
   | { kind: "ready"; replay: ReplayView }
   | { kind: "unavailable"; message: string };
 const placeKey = "pitch.replay.v1";
-const commandKey = "pitch.command.v1";
+const commandKey = "pitch.command.v2:";
 function remember(key: string, value: string | null) {
   try {
     if (value === null) localStorage.removeItem(key);
@@ -30,6 +31,8 @@ function savePlace(id: string) {
   remember(placeKey, id);
   const url = new URL(window.location.href);
   url.searchParams.set("replay", id);
+  url.searchParams.delete("browse");
+  url.searchParams.delete("game");
   window.history.replaceState(null, "", url);
 }
 function message(error: unknown) {
@@ -50,16 +53,29 @@ export function useReplay() {
   const pending = useRef<PendingCommand | null>(null);
   const accept = useCallback((replay: ReplayView) => {
     savePlace(replay.id);
-    pending.current = unresolvedCommand(remembered(commandKey), replay);
+    pending.current = unresolvedCommand(
+      remembered(`${commandKey}${replay.id}`),
+      replay,
+    );
     setNeedsRetry(Boolean(pending.current));
     setNotice(pending.current ? "Your last action needs a retry." : null);
-    if (!pending.current) remember(commandKey, null);
+    if (!pending.current) remember(`${commandKey}${replay.id}`, null);
     setScreen({ kind: "ready", replay });
   }, []);
 
   const restore = useCallback(
     async (signal?: AbortSignal) => {
       const token = ++generation.current;
+      const location = new URL(window.location.href);
+      if (location.searchParams.get("browse") === "1") {
+        setScreen({
+          kind: "browse",
+          date: location.searchParams.get("date"),
+          gamePk: location.searchParams.get("game"),
+        });
+        setNotice(null);
+        return;
+      }
       const id =
         new URL(window.location.href).searchParams.get("replay") ??
         remembered(placeKey);
@@ -76,6 +92,21 @@ export function useReplay() {
           } catch (error) {
             if (!(error instanceof ReplayApiError && error.status === 404))
               throw error;
+            try {
+              const { replay } = await requestJson<{ replay: ReplayView }>(
+                "/api/replays",
+                { body: { editionId: id }, signal },
+              );
+              if (!signal?.aborted && token === generation.current)
+                accept(replay);
+              return;
+            } catch (startError) {
+              if (!(
+                startError instanceof ReplayApiError &&
+                startError.status === 404
+              ))
+                throw startError;
+            }
             remember(placeKey, null);
             const url = new URL(window.location.href);
             url.searchParams.delete("replay");
@@ -99,6 +130,22 @@ export function useReplay() {
   );
 
   useEffect(() => {
+    // Migrate the previous single-replay intent into a per-replay slot.
+    const legacy = remembered("pitch.command.v1");
+    if (legacy) {
+      try {
+        const value = JSON.parse(legacy) as PendingCommand;
+        if (
+          /^[a-f0-9]{64}$/.test(value.replayId) &&
+          value.command &&
+          !remembered(`${commandKey}${value.replayId}`)
+        )
+          remember(`${commandKey}${value.replayId}`, legacy);
+      } catch {
+        /* Invalid saved intent cannot be replayed. */
+      }
+      remember("pitch.command.v1", null);
+    }
     const controller = new AbortController();
     // Let React finish mounting; an abandoned Strict Mode pass starts no request.
     void Promise.resolve().then(() => {
@@ -109,7 +156,7 @@ export function useReplay() {
         !active.current &&
         (!(event instanceof StorageEvent) ||
           event.key === placeKey ||
-          event.key === commandKey)
+          event.key?.startsWith(commandKey))
       )
         void restore(controller.signal);
     };
@@ -122,26 +169,59 @@ export function useReplay() {
     };
   }, [restore]);
 
-  async function start() {
-    if (screen.kind !== "intro" || active.current) return;
+  const openEdition = useCallback(
+    async (id: string) => {
+      if (active.current) return;
+      generation.current++;
+      active.current = true;
+      setBusy(true);
+      setNotice(null);
+      try {
+        // Save intent first: response loss and refresh can reattach to the same session.
+        savePlace(id);
+        const { replay } = await requestJson<{ replay: ReplayView }>(
+          "/api/replays",
+          { body: { editionId: id } },
+        );
+        accept(replay);
+      } catch (error) {
+        setNotice(message(error));
+      } finally {
+        active.current = false;
+        setBusy(false);
+      }
+    },
+    [accept],
+  );
+
+  function start() {
+    if (screen.kind === "intro") return openEdition(screen.edition.id);
+  }
+
+  function browse(date?: string | null, gamePk?: string | null) {
+    if (active.current) return;
     generation.current++;
-    active.current = true;
-    setBusy(true);
+    const url = new URL(window.location.href);
+    const entering = screen.kind !== "browse";
+    url.searchParams.set("browse", "1");
+    const selectedDate =
+      date === undefined ? url.searchParams.get("date") : date;
+    if (selectedDate) url.searchParams.set("date", selectedDate);
+    else url.searchParams.delete("date");
+    if (gamePk) url.searchParams.set("game", gamePk);
+    else url.searchParams.delete("game");
+    window.history[entering ? "pushState" : "replaceState"](null, "", url);
+    setScreen({ kind: "browse", date: selectedDate, gamePk: gamePk ?? null });
     setNotice(null);
-    try {
-      // Save intent first: response loss and refresh can reattach to the same session.
-      savePlace(screen.edition.id);
-      const { replay } = await requestJson<{ replay: ReplayView }>(
-        "/api/replays",
-        { body: { editionId: screen.edition.id } },
-      );
-      accept(replay);
-    } catch (error) {
-      setNotice(message(error));
-    } finally {
-      active.current = false;
-      setBusy(false);
-    }
+  }
+
+  async function returnToReplay() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("browse");
+    url.searchParams.delete("game");
+    window.history.replaceState(null, "", url);
+    setScreen({ kind: "loading" });
+    await restore();
   }
 
   async function send(action: ReplayCommand["action"]) {
@@ -158,7 +238,7 @@ export function useReplay() {
           };
     pending.current = { replayId: replay.id, command };
     setNeedsRetry(true);
-    remember(commandKey, JSON.stringify(pending.current));
+    remember(`${commandKey}${replay.id}`, JSON.stringify(pending.current));
     active.current = true;
     setBusy(true);
     setNotice(null);
@@ -172,7 +252,7 @@ export function useReplay() {
       if (error instanceof ReplayApiError && error.status === 404) {
         pending.current = null;
         setNeedsRetry(false);
-        remember(commandKey, null);
+        remember(`${commandKey}${replay.id}`, null);
         await restore();
         return;
       }
@@ -209,5 +289,16 @@ export function useReplay() {
       setBusy(false);
     }
   }
-  return { screen, busy, notice, start, send, restore: reopen, needsRetry };
+  return {
+    screen,
+    busy,
+    notice,
+    start,
+    send,
+    restore: reopen,
+    needsRetry,
+    browse,
+    returnToReplay,
+    openEdition,
+  };
 }

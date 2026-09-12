@@ -7,12 +7,41 @@ import {
   buildPredictionRequest,
   replayContract,
   selectFeaturedAtBat,
+  editionSummary,
+  type EditionSummary,
   type GameReplay,
   type PredictionRequest,
   type PredictionResponse,
   type ReplayEdition,
 } from "@pitch/domain";
 import type { Storage } from "@pitch/db";
+import { gameEditionKey, catalogEditionsKey } from "./job";
+
+export class PreparationBudgetError extends Error {
+  constructor(readonly retryAt: string) {
+    super(
+      "Preparation budget reached. Existing published replays remain available.",
+    );
+  }
+}
+
+export async function preparationBudget(storage: Storage, now = new Date()) {
+  const month = now.toISOString().slice(0, 7);
+  const day = now.toISOString().slice(0, 10);
+  const record = await storage.read<{
+    total: number;
+    days: Record<string, number>;
+  }>(`preparation-budget:${month}`);
+  const current = record?.value ?? { total: 0, days: {} };
+  const monthly = current.total >= 400;
+  const limited = monthly || (current.days[day] ?? 0) >= 20;
+  const reset = monthly
+    ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+    : new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+      );
+  return { limited, retryAt: reset.toISOString() };
+}
 
 export async function consumePreparationBudget(
   storage: Storage,
@@ -28,8 +57,8 @@ export async function consumePreparationBudget(
     }>(key);
     const current = record?.value ?? { total: 0, days: {} };
     if (current.total >= 400 || (current.days[day] ?? 0) >= 20)
-      throw new Error(
-        "Preparation budget reached. Existing published replays remain available.",
+      throw new PreparationBudgetError(
+        (await preparationBudget(storage, now)).retryAt,
       );
     if (
       await storage.write(
@@ -56,13 +85,14 @@ export async function prepareReplay(input: {
   modelArtifact: string;
   storage: Storage;
   predict: (request: PredictionRequest) => Promise<PredictionResponse>;
-  onProgress?: (done: number, total: number) => void;
+  onProgress?: (done: number, total: number) => void | Promise<void>;
   now?: () => Date;
 }): Promise<ReplayEdition> {
   const now = input.now ?? (() => new Date());
   if (!input.modelArtifact.trim())
     throw new Error("Model artifact identity is required.");
   const pitches = selectFeaturedAtBat(input.replay);
+  await input.onProgress?.(0, pitches.length);
   const requests = pitches.map((actual) =>
     buildPredictionRequest({
       currentPitch: actual,
@@ -131,7 +161,7 @@ export async function prepareReplay(input: {
       }
       predictionResponseSchema.parse(prediction);
       items.push({ actual, request: requests[index], prediction });
-      input.onProgress?.(index + 1, pitches.length);
+      await input.onProgress?.(index + 1, pitches.length);
     }
     const edition: ReplayEdition = {
       id,
@@ -167,6 +197,7 @@ export async function publishReplay(storage: Storage, edition: ReplayEdition) {
   assertEdition(stored.value);
   if (!isDeepStrictEqual(stored.value, edition))
     throw new Error("The saved edition differs from the reviewed edition.");
+  await indexGameEdition(storage, edition);
   const previous = await storage.read<{ editionId: string }>("featured");
   if (previous?.value.editionId === edition.id) return;
   if (
@@ -182,4 +213,48 @@ export async function publishReplay(storage: Storage, edition: ReplayEdition) {
     throw new Error(
       "Featured replay changed during publication. Review and retry.",
     );
+}
+
+export async function indexGameEdition(
+  storage: Storage,
+  edition: ReplayEdition,
+) {
+  assertEdition(edition);
+  const stored = await storage.read<ReplayEdition>(`edition:${edition.id}`);
+  if (!stored || !isDeepStrictEqual(stored.value, edition))
+    throw new Error("Save the complete edition before indexing the game.");
+  const key = gameEditionKey(edition.game.gamePk);
+  const previous = await storage.read<{ editionId: string }>(key);
+  const summary = editionSummary(edition);
+  if (
+    previous?.value.editionId !== edition.id &&
+    !(await storage.write(
+      {
+        key,
+        revision: (previous?.revision ?? -1) + 1,
+        value: { editionId: edition.id, summary },
+      },
+      previous?.revision ?? null,
+    ))
+  )
+    throw new Error("The saved game replay changed during publication.");
+  const dateKey = catalogEditionsKey(edition.game.officialDate);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const date = await storage.read<Record<string, EditionSummary>>(dateKey);
+    if (date?.value[edition.game.gamePk]?.id === edition.id) return;
+    if (
+      await storage.write(
+        {
+          key: dateKey,
+          revision: (date?.revision ?? -1) + 1,
+          value: { ...date?.value, [edition.game.gamePk]: summary },
+        },
+        date?.revision ?? null,
+      )
+    )
+      return;
+  }
+  throw new Error(
+    "The date catalog changed during publication. Retry indexing.",
+  );
 }

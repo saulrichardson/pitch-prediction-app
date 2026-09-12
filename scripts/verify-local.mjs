@@ -54,6 +54,10 @@ try {
     ...process.env,
     BASE_URL: "http://127.0.0.1:3100",
   });
+  await run(["scripts/verify-game-catalog.mjs"], {
+    ...process.env,
+    BASE_URL: "http://127.0.0.1:3100",
+  });
 } finally {
   server.kill("SIGTERM");
 }

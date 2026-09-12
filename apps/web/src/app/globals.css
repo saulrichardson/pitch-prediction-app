@@ -1121,3 +1121,333 @@ meter::-webkit-meter-optimum-value {
     padding: 16px 0;
   }
 }
+
+/* Game discovery shares the replay's palette, spacing, and interaction rhythm. */
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.text-button:hover:not(:disabled),
+.games-nav[aria-current] {
+  color: var(--color-text);
+}
+.games-nav {
+  color: var(--color-text);
+  min-height: 44px;
+}
+.intro-browse {
+  display: flex;
+  margin-top: 8px;
+}
+.game-browser {
+  padding: 16px 0 40px;
+  animation: appear 180ms var(--ease);
+}
+.catalog-return {
+  margin-bottom: 24px;
+}
+.catalog-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.catalog-heading h1 {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  letter-spacing: -2px;
+  line-height: 1.1;
+  margin-top: 10px;
+}
+.catalog-heading > p {
+  color: var(--color-muted);
+  font-size: 15px;
+}
+.date-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 0;
+  gap: 8px;
+}
+.date-strip button {
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 12px 4px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  transition:
+    background 160ms var(--ease),
+    color 160ms var(--ease);
+}
+.date-strip button:hover {
+  background: var(--color-tint);
+}
+.date-strip button strong {
+  font-size: 25px;
+  font-weight: 550;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.date-strip button span {
+  font-size: 12px;
+}
+.date-strip button.selected {
+  background: var(--color-text);
+  color: var(--color-canvas);
+}
+.date-strip button.selected strong {
+  color: inherit;
+}
+.games-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 32px 0 10px;
+}
+.games-heading h2 {
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.4px;
+}
+.games-heading > span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.game-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px 135px;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  padding: 20px 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  color: var(--color-text);
+  transition: background 160ms var(--ease);
+}
+.game-row:hover:not(:disabled),
+.game-row.is-selected {
+  background: var(--color-tint);
+}
+.game-row:disabled {
+  opacity: 0.6;
+}
+.game-teams {
+  display: grid;
+  gap: 7px;
+}
+.game-teams > span {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.game-teams b {
+  width: 43px;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+}
+.game-teams > span > span {
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.game-row-detail {
+  display: grid;
+  gap: 4px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.game-row-action {
+  display: flex;
+  justify-content: end;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.game-row-action > svg:last-child {
+  margin-left: 6px;
+  color: var(--color-primary);
+}
+.catalog-loading,
+.catalog-empty {
+  padding: 64px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--color-muted);
+  text-align: center;
+}
+.catalog-empty h3 {
+  color: var(--color-text);
+  font-size: 20px;
+  font-weight: 550;
+}
+.preparation-panel {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.preparation-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.preparation-title h2 {
+  font-size: 25px;
+  font-weight: 550;
+  letter-spacing: -0.6px;
+  margin-top: 5px;
+}
+.preparation-panel > p {
+  color: var(--color-muted);
+  font-size: 14px;
+  max-width: 600px;
+}
+.preparation-panel > .button {
+  margin-top: 16px;
+}
+.preparation-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 440px;
+  margin-top: 18px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.preparation-progress progress {
+  appearance: none;
+  border: 0;
+  border-radius: 3px;
+  height: 4px;
+  flex: 1;
+  min-width: 0;
+  background: var(--color-border);
+}
+.preparation-progress progress::-webkit-progress-bar {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+.preparation-progress progress::-webkit-progress-value {
+  background: var(--color-primary);
+  border-radius: 3px;
+  transition: width 200ms var(--ease);
+}
+.preparation-progress progress::-moz-progress-bar {
+  background: var(--color-primary);
+  border-radius: 3px;
+}
+.preparation-panel .retry-time {
+  margin-top: 8px;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .masthead-actions {
+    gap: 16px;
+  }
+  .game-browser {
+    padding-top: 0;
+  }
+  .catalog-return {
+    margin-bottom: 20px;
+  }
+  .catalog-heading {
+    display: block;
+    margin-bottom: 24px;
+  }
+  .catalog-heading h1 {
+    letter-spacing: -1.3px;
+  }
+  .catalog-heading > p {
+    margin-top: 14px;
+    font-size: 14px;
+  }
+  .catalog-heading > p br {
+    display: none;
+  }
+  .date-strip {
+    gap: 3px;
+  }
+  .date-strip button {
+    border-radius: 9px;
+    padding: 10px 2px;
+  }
+  .date-strip button strong {
+    font-size: 22px;
+  }
+  .date-strip button span {
+    font-size: 11px;
+  }
+  .games-heading {
+    margin-top: 24px;
+  }
+  .games-heading h2 {
+    font-size: 16px;
+  }
+  .games-heading > span {
+    font-size: 11px;
+  }
+  .game-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 18px 4px;
+  }
+  .game-teams > span {
+    gap: 8px;
+  }
+  .game-teams b {
+    font-size: 16px;
+    width: 38px;
+  }
+  .game-teams > span > span {
+    font-size: 12px;
+  }
+  .game-row-detail {
+    grid-column: 1;
+    grid-row: 2;
+    padding-left: 46px;
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+  }
+  .game-row-action {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .game-row-action > svg:last-child {
+    margin-left: 0;
+  }
+  .preparation-title h2 {
+    font-size: 22px;
+  }
+}
+@media (max-width: 380px) {
+  .wordmark-sub {
+    display: none;
+  }
+}

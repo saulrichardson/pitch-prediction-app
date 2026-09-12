@@ -2,12 +2,9 @@ import { readFile, writeFile, mkdir, open } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { getStorage, type Storage, type StoredRecord } from "@pitch/db";
-import {
-  getGameReplay,
-  getLatestMetsGame,
-} from "../apps/web/src/lib/mlb-service";
+import { getGameReplay, getLatestMetsGame } from "@pitch/workflows";
 import { predictPitch } from "../apps/web/src/lib/model-service";
-import { prepareReplay, publishReplay } from "./lib/preparation";
+import { prepareReplay, publishReplay } from "@pitch/workflows";
 
 async function main() {
   const { values } = parseArgs({

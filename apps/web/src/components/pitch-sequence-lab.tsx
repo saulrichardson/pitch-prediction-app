@@ -18,6 +18,7 @@ import {
 import { useReplay } from "./replay/use-replay";
 import { PitchPlot } from "./replay/pitch-plot";
 import { gameDate, percent, pitchName, ranked } from "./replay/format";
+import { GameBrowser } from "./replay/game-browser";
 
 export default function PitchPredictionApp() {
   const app = useReplay();
@@ -58,7 +59,17 @@ export default function PitchPredictionApp() {
           </span>
           Pitch<span className="wordmark-sub">/ Replay</span>
         </div>
-        <About />
+        <div className="masthead-actions">
+          <button
+            className="text-button games-nav"
+            onClick={() => app.browse()}
+            disabled={app.busy}
+            aria-current={app.screen.kind === "browse" ? "page" : undefined}
+          >
+            Games
+          </button>
+          <About />
+        </div>
       </nav>
       {app.screen.kind === "loading" ? (
         <section className="loading-screen" role="status">
@@ -86,6 +97,18 @@ export default function PitchPredictionApp() {
           busy={app.busy}
           onStart={app.start}
           notice={app.notice}
+          onBrowse={() => app.browse()}
+        />
+      ) : null}
+      {app.screen.kind === "browse" ? (
+        <GameBrowser
+          date={app.screen.date}
+          gamePk={app.screen.gamePk}
+          busy={app.busy}
+          notice={app.notice}
+          onBrowse={app.browse}
+          onOpen={app.openEdition}
+          onReturn={app.returnToReplay}
         />
       ) : null}
       {replay ? (
@@ -251,11 +274,13 @@ function Intro({
   busy,
   onStart,
   notice,
+  onBrowse,
 }: {
   edition: EditionSummary;
   busy: boolean;
   onStart: () => void;
   notice: string | null;
+  onBrowse: () => void;
 }) {
   return (
     <section className="intro">
@@ -279,6 +304,13 @@ function Intro({
           {busy ? <LoaderCircle className="spinner" size={17} /> : null}
           {busy ? "Opening replay" : "Start replay"}
           <ArrowRight size={17} />
+        </button>
+        <button
+          className="text-button intro-browse"
+          onClick={onBrowse}
+          disabled={busy}
+        >
+          Choose another game <ArrowRight size={15} />
         </button>
         {notice ? (
           <p className="connection-notice" role="status">

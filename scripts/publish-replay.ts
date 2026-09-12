@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { getStorage, getStorageMode } from "@pitch/db";
 import { assertEdition, type ReplayEdition } from "@pitch/domain";
-import { publishReplay } from "./lib/preparation";
+import { publishReplay } from "@pitch/workflows";
 
 async function main() {
   const { values } = parseArgs({

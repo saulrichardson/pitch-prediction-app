@@ -2,8 +2,20 @@ import {
   normalizeMlbLiveFeed,
   type GameReplay,
   type GameSummary,
+  normalizeSchedule,
 } from "@pitch/domain";
 const base = "https://statsapi.mlb.com";
+export async function getSchedule(date: string) {
+  const response = await fetch(
+    `${base}/api/v1/schedule?sportId=1&date=${encodeURIComponent(date)}&hydrate=team`,
+    {
+      signal: AbortSignal.timeout(8000),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`MLB schedule unavailable (${response.status}).`);
+  return normalizeSchedule(await response.json(), date);
+}
 export async function getLatestMetsGame(): Promise<GameSummary> {
   const end = new Date();
   const start = new Date(end);

@@ -16,6 +16,8 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
+      "@pitch/workflows": ["packages/workflows/src/index.ts"],
+      "@pitch/workflows/*": ["packages/workflows/src/*"],
       "@pitch/domain": ["packages/domain/src/index.ts"],
       "@pitch/domain/*": ["packages/domain/src/*"],
       "@pitch/db": ["packages/db/src/index.ts"],

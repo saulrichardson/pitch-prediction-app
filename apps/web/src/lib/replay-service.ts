@@ -10,6 +10,8 @@ import {
   type ReplaySession,
 } from "@pitch/domain";
 import { conflict, notFound, serviceUnavailable } from "./http";
+import { indexGameEdition } from "@pitch/workflows";
+import type { CatalogGame } from "@pitch/domain";
 
 export function replayService(storage: Storage, now = () => new Date()) {
   const editionKey = (id: string) => `edition:${id}`;
@@ -131,7 +133,12 @@ export async function getReplayService() {
       const { readFile } = await import("node:fs/promises");
       const edition = JSON.parse(
         await readFile(process.env.REPLAY_EDITION_PATH!, "utf8"),
-      ) as ReplayEdition;
+      ) as ReplayEdition & {
+        testCatalog?: {
+          editions: ReplayEdition[];
+          schedules: Record<string, CatalogGame[]>;
+        };
+      };
       assertEdition(edition);
       await storage.write(
         { key: `edition:${edition.id}`, revision: 0, value: edition },
@@ -141,6 +148,33 @@ export async function getReplayService() {
         { key: "featured", revision: 0, value: { editionId: edition.id } },
         null,
       );
+      await indexGameEdition(storage, edition);
+      // This fixture bundle is only reachable in explicitly configured local memory mode.
+      if (edition.testCatalog) {
+        for (const extra of edition.testCatalog.editions) {
+          assertEdition(extra);
+          await storage.write(
+            { key: `edition:${extra.id}`, revision: 0, value: extra },
+            null,
+          );
+          await indexGameEdition(storage, extra);
+        }
+        for (const [date, games] of Object.entries(
+          edition.testCatalog.schedules,
+        )) {
+          await storage.write(
+            {
+              key: `schedule:${date}`,
+              revision: 0,
+              value: {
+                fetchedAt: new Date(Date.now() + 86400_000).toISOString(),
+                games,
+              },
+            },
+            null,
+          );
+        }
+      }
     })();
     await localEditionLoaded;
   }

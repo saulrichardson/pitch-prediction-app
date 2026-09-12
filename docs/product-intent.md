@@ -8,23 +8,34 @@ instructions surrounding every action.
 ## Product Direction
 
 The primary experience is a complete, prepared at-bat of 3–8 pitches from a
-completed Mets game. The operator chooses a game and publishes a complete
-edition; the default is the latest completed game available within 21 days.
+completed MLB game. Users can choose any team and any official game date in the
+last seven days, including today. Dates follow America/New_York. The featured
+replay remains a quick entry point; the Games browser offers the full schedule
+without final scores. Live, postponed, and cancelled games show their status.
 An edition is selected for a coherent sequence, never for a flattering model
 result. A small complete experience is the unit of delivery.
 
-A replay is ready before the user starts. Opening it, revealing a pitch,
+A game is prepared once and shared across users. Its first opening queues
+preparation with visible pitch progress; the user can keep browsing and return
+after a refresh. Only a complete validated edition opens the replay. Later
+openings use that edition immediately. Preparation uses the existing shared
+limit of 20 model attempts per UTC day and 400 per month. A reached limit shows
+the reset time and leaves saved games available.
+
+A replay is ready before the first pitch. Opening it, revealing a pitch,
 advancing, going back, refreshing, and restarting use the saved edition. Model
 inference is publication work. It is never part of a replay command.
 
 ## Core Workflow
 
-1. See the featured matchup, game date, and number of pitches.
-2. Start the replay and read the leading forecast with two alternatives.
+1. Open the feature or choose a date and game from Games.
+2. Open the saved at-bat, or follow preparation progress, then read the leading
+   forecast with two alternatives.
 3. Reveal the actual pitch on the same comparison surface.
 4. Advance to the next saved forecast.
 5. Finish the at-bat, see the result and match count, and replay if desired.
 
+Each game keeps its own cursor and pending action when the user switches games.
 The main action changes from **Reveal pitch** to **Next pitch** to **Replay
 again**. Back reverses one replay step. Refresh restores the same place. A failed
 request has one retry action and preserves the last acknowledged view.
@@ -66,5 +77,5 @@ experience. A future expansion must preserve the immediate, coherent replay.
 
 Anonymous sessions last 14 days. Existing editions remain available to their
 sessions when a new feature is published. Publication failures leave the prior
-feature available. There is no product promise that the feature updates daily
-until a publication schedule is implemented and operated.
+feature available. The game browser loads the current MLB schedule on demand;
+the featured edition remains operator-published without a daily scheduler.

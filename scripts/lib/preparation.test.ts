@@ -5,7 +5,7 @@ import {
   consumePreparationBudget,
   prepareReplay,
   publishReplay,
-} from "./preparation";
+} from "@pitch/workflows";
 
 const fixture = fixtureEdition();
 const replay = {
