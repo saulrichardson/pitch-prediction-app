@@ -8,10 +8,16 @@ export AWS_REGION AWS_DEFAULT_REGION
 ECR_REPOSITORY_NAME="${ECR_REPOSITORY_NAME:-pitch-prediction-app}"
 SERVERLESS_WEB_IMAGE_TAG="${SERVERLESS_WEB_IMAGE_TAG:-serverless-$(git rev-parse --short=12 HEAD)}"
 SERVERLESS_WEB_LATEST_TAG="${SERVERLESS_WEB_LATEST_TAG:-serverless-latest}"
+SERVERLESS_WEB_RESERVED_CONCURRENCY="${SERVERLESS_WEB_RESERVED_CONCURRENCY:-10}"
+CLOUDFRONT_ALLOWED_COUNTRIES="${CLOUDFRONT_ALLOWED_COUNTRIES:-US}"
 CUSTOM_DOMAIN_NAME="${CUSTOM_DOMAIN_NAME:-baseball.saulrichardson.io}"
 ACM_CERTIFICATE_ARN="${ACM_CERTIFICATE_ARN:-arn:aws:acm:us-east-1:492205018164:certificate/62136baf-0216-4c9a-acbc-7e6e1694b0f0}"
-export ECR_REPOSITORY_NAME SERVERLESS_WEB_IMAGE_TAG
-export CUSTOM_DOMAIN_NAME ACM_CERTIFICATE_ARN
+export ECR_REPOSITORY_NAME SERVERLESS_WEB_IMAGE_TAG SERVERLESS_WEB_RESERVED_CONCURRENCY
+export CLOUDFRONT_ALLOWED_COUNTRIES CUSTOM_DOMAIN_NAME ACM_CERTIFICATE_ARN
+
+# Fail before changing the web deployment when no complete replay is available.
+STORAGE_MODE=dynamodb DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME:-pitch-sequence-serverless-state}" \
+  npm run publish:replay -- --check
 
 account_id="$(aws sts get-caller-identity --query Account --output text)"
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -23,7 +29,7 @@ echo "Building and pushing serverless web image ${image_uri}"
 aws ecr describe-repositories --repository-names "${ECR_REPOSITORY_NAME}" >/dev/null 2>&1 \
   || aws ecr create-repository --repository-name "${ECR_REPOSITORY_NAME}" >/dev/null
 
-lifecycle_policy='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 3 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":3},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 20 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}'
+lifecycle_policy='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 1 day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 2 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}}]}'
 aws ecr put-lifecycle-policy \
   --repository-name "${ECR_REPOSITORY_NAME}" \
   --lifecycle-policy-text "${lifecycle_policy}" >/dev/null

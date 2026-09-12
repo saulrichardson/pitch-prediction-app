@@ -22,6 +22,13 @@
       "when": 1779031085800,
       "tag": "0002_typical_carnage",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789240031385,
+      "tag": "0003_majestic_cerebro",
+      "breakpoints": true
     }
   ]
 }

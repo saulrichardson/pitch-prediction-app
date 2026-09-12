@@ -1,32 +1,32 @@
 # Documentation
 
-This directory contains the reusable doctrine and project-local decisions for
-`Pitch Prediction App`.
+This directory contains project-local context for Pitch Prediction App.
 
 ## Read Order
 
 1. `../AGENTS.md`
-2. `project-profile.md`
-3. `product-intent.md`
-4. `engineering/agent-execution-protocol.md`
-5. `engineering/definition-of-done.md`
-6. `engineering/doctrine.md`
-7. `architecture/system-map.md`
-8. `architecture/stack-profile.md`
-9. Relevant contracts in `contracts/`
-10. Relevant threat model in `security/`
-11. Relevant ADRs in `adr/`
-12. Relevant templates in `templates/`
+2. `product-intent.md`
+3. `approach.md`
+4. `records/README.md`
+5. Relevant records in `records/`
+6. Nearby code, tests, configs, data, and deployment files
 
-## Ownership Model
+## Model
 
-The reusable doctrine gives the project a starting point. The project owns the
-generated files after creation.
+Use `product-intent.md` for the north star: what the product should accomplish,
+who it serves, what outcomes matter, and which workflows define success.
 
-Use `product-intent.md` for freeform notes about what the product is actually
-trying to do. Promote stable facts from that file into `project-profile.md`,
-contracts, feature briefs, ADRs, or tests when implementation starts depending
-on them.
+Use `approach.md` for the current operating model: how the project is built,
+where important behavior lives, what stack is in use, what constraints matter,
+and how work is verified and delivered.
 
-Use ADRs when a local decision changes architecture, authority, persistence,
-workflow behavior, tool capabilities, or deployment strategy.
+Use `records/` for durable memory: decisions, caveats, lessons, risks,
+tradeoffs, stack rationale, and operating notes that future agents should
+understand.
+
+## Practical Rule
+
+- Product goal or user intent: `product-intent.md`
+- Current stack, architecture, constraints, or delivery model: `approach.md`
+- Rationale, history, caveats, or lessons: `records/`
+- Agent behavior and working rules: `../AGENTS.md`

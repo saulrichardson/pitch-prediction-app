@@ -1,9 +1,11 @@
+import importlib
+
 import pytest
 from fastapi import HTTPException, status
 
 from pitch_model_api.main import app, require_service_auth
 from pitch_model_api.config import Settings, settings_from_env
-from pitch_model_api.lambda_handler import configure_writable_runtime_dirs
+from pitch_model_api.lambda_handler import configure_writable_runtime_dirs, should_initialize_for_snapshot
 from pitch_model_api.runtime import PitchPredictRuntime
 
 
@@ -67,6 +69,32 @@ def test_lambda_runtime_dirs_are_writable(monkeypatch, tmp_path) -> None:
 
     for path in (pybaseball_cache, model_dir, cache_dir, log_dir):
         assert path.is_dir()
+
+
+def test_lambda_import_defers_model_warmup_to_the_first_invocation(monkeypatch) -> None:
+    monkeypatch.setenv("PITCHPREDICT_WARM_ON_STARTUP", "true")
+    monkeypatch.delenv("PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT", raising=False)
+    monkeypatch.delenv("AWS_LAMBDA_INITIALIZATION_TYPE", raising=False)
+
+    import pitch_model_api.lambda_handler as lambda_handler
+
+    reloaded = importlib.reload(lambda_handler)
+
+    assert reloaded._runtime is None
+    assert reloaded._runtime_init_error is None
+
+
+def test_snapshot_initialization_requires_both_deploy_opt_in_and_snapstart_phase(monkeypatch) -> None:
+    monkeypatch.setenv("PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT", "true")
+    monkeypatch.delenv("AWS_LAMBDA_INITIALIZATION_TYPE", raising=False)
+    assert should_initialize_for_snapshot() is False
+
+    monkeypatch.setenv("PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT", "false")
+    monkeypatch.setenv("AWS_LAMBDA_INITIALIZATION_TYPE", "snap-start")
+    assert should_initialize_for_snapshot() is False
+
+    monkeypatch.setenv("PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT", "true")
+    assert should_initialize_for_snapshot() is True
 
 
 class RuntimeWithFakeClient(PitchPredictRuntime):

@@ -23,18 +23,18 @@ PRODUCT_PITCH_TYPES: tuple[PitchType, ...] = ("FF", "SI", "SL", "CH", "CU", "FC"
 MODEL_OTHER_PITCH = "UN"
 
 LOCATION_BUCKETS: tuple[LocationBucket, ...] = (
-    "Up In",
-    "Up Middle",
-    "Up Away",
-    "Middle In",
+    "High left",
+    "High middle",
+    "High right",
+    "Middle left",
     "Middle",
-    "Middle Away",
-    "Low In",
-    "Low Middle",
-    "Low Away",
-    "Chase Low",
-    "Chase Away",
-    "Waste",
+    "Middle right",
+    "Low left",
+    "Low middle",
+    "Low right",
+    "Below zone",
+    "Low wide",
+    "Untracked",
 )
 
 DEFAULT_PITCH_SHAPES: dict[str, dict[str, float]] = {
@@ -50,10 +50,16 @@ DEFAULT_PITCH_SHAPES: dict[str, dict[str, float]] = {
 
 
 def to_pitchpredict_request(request: PredictionRequest, algorithm: str, sample_size: int) -> dict[str, Any]:
+    history = []
+    encounters: dict[str, set[str]] = {}
+    for pitch in request.pitcherSessionHistory:
+        prior = encounters.setdefault(pitch.matchup.batterId, set())
+        prior.add(pitch.paId)
+        history.append({**to_pitchpredict_pitch(pitch), "number_through_order": len(prior)})
     return {
         "pitcher_id": parse_mlbam_id(request.pitcherId, "pitcherId"),
         "batter_id": parse_mlbam_id(request.batterId, "batterId"),
-        "prev_pitches": [to_pitchpredict_pitch(pitch) for pitch in request.pitcherSessionHistory],
+        "prev_pitches": history,
         "algorithm": algorithm,
         "sample_size": sample_size,
         "pitcher_throws": hand_or_none(request.pitcherHand),
@@ -107,7 +113,6 @@ def to_pitchpredict_pitch(pitch: PitchEvent) -> dict[str, Any]:
         "score_fld": state.homeScore if state.half == "top" else state.awayScore,
         "inning": state.inning,
         "pitch_number": max(1, pitch.pitchNumber),
-        "number_through_order": max(1, pitch.gamePitchIndex // 18 + 1),
     }
 
 
@@ -119,12 +124,13 @@ def normalize_prediction(request: PredictionRequest, raw: Any, model_version: st
 
     basic_pitch_data = raw_dict.get("basic_pitch_data") or {}
     basic_outcome_data = raw_dict.get("basic_outcome_data") or {}
-    pitch_mix = pitch_mix_from_probs(basic_pitch_data.get("pitch_type_probs") or {}) or pitch_mix_from_pitches(pitches)
+    model_pitch_mix = pitch_mix_from_probs(basic_pitch_data.get("pitch_type_probs") or {})
+    pitch_mix = model_pitch_mix or pitch_mix_from_pitches(pitches)
     result_mix = result_mix_from_pitches(pitches) or result_mix_from_outcomes(basic_outcome_data.get("outcome_probs") or {})
     density = location_density(pitches)
     expected = expected_location(
-        basic_pitch_data.get("pitch_x_mean"),
-        basic_pitch_data.get("pitch_z_mean"),
+        None,
+        None,
         pitches,
     )
     possible_pitches = possible_pitch_events(pitches)
@@ -135,11 +141,12 @@ def normalize_prediction(request: PredictionRequest, raw: Any, model_version: st
         id=f"real-{uuid4()}",
         modelVersion=model_version,
         pitchMix=pitch_mix,
+        pitchMixSource="model" if model_pitch_mix else "samples",
         resultMix=result_mix,
         location={"density": density, "expected": expected},
-        countImpact=count_impact(request, result_mix),
-        paForecast=pa_forecast(request, result_mix),
-        expectedPitchesRemaining=expected_pitches_remaining(request, result_mix),
+        countImpact=count_impact(request, pitches),
+        sampleSize=len(pitches),
+        velocity=velocity_estimates(pitches),
         possiblePitches=possible_pitches[:4],
         createdAt=datetime.now(timezone.utc).isoformat(),
     )
@@ -189,9 +196,11 @@ def expected_location(px: Any, pz: Any, pitches: list[dict[str, Any]]) -> PitchL
     x = finite_or(px, None)
     z = finite_or(pz, None)
     if x is None and pitches:
-        x = sum(finite_or(pitch.get("plate_pos_x"), 0.0) for pitch in pitches) / len(pitches)
+        values = [v for pitch in pitches if (v := finite_or(pitch.get("plate_pos_x"), None)) is not None]
+        x = sum(values) / len(values) if values else None
     if z is None and pitches:
-        z = sum(finite_or(pitch.get("plate_pos_z"), 2.5) for pitch in pitches) / len(pitches)
+        values = [v for pitch in pitches if (v := finite_or(pitch.get("plate_pos_z"), None)) is not None]
+        z = sum(values) / len(values) if values else None
     return location_from_coordinates(x, z)
 
 
@@ -206,58 +215,45 @@ def possible_pitch_events(pitches: list[dict[str, Any]]) -> list[PossiblePitch]:
         if key in seen:
             continue
         seen.add(key)
-        velocity = finite_or(pitch.get("speed"), DEFAULT_PITCH_SHAPES[model_pitch_type(pitch_type)]["speed"])
+        velocity = finite_or(pitch.get("speed"), None)
+        speed_text = f"{velocity:.1f} mph" if velocity is not None else "speed unavailable"
         result.append(PossiblePitch(
             pitchType=pitch_type,
-            velocity=round(velocity, 1),
+            velocity=round(velocity, 1) if velocity is not None else None,
             location=location,
             result=pitch_result,
-            description=f"{pitch_type} {round(velocity, 1)} {location.label.lower()}, {result_description(pitch_result)}",
+            description=f"{pitch_type} {speed_text} {location.label.lower()}, {result_description(pitch_result)}",
         ))
     return result
 
 
-def count_impact(request: PredictionRequest, result_mix: list[Probability]) -> list[Probability]:
-    balls = request.count.balls
-    strikes = request.count.strikes
-    ball = probability_for(result_mix, "Ball")
-    strike = probability_for(result_mix, "Strike/Foul")
-    contact = probability_for(result_mix, "Ball In Play")
-    hbp = probability_for(result_mix, "HBP / Other")
-    return normalize_probabilities_preserving_labels([
-        Probability(label="Walk" if balls == 3 else f"{min(3, balls + 1)}-{strikes}", probability=ball),
-        Probability(label="Strikeout" if strikes == 2 else f"{balls}-{min(2, strikes + 1)}", probability=strike),
-        Probability(label="Ball in play", probability=contact),
-        Probability(label="Hit by pitch", probability=hbp),
-    ])
+def count_impact(request: PredictionRequest, pitches: list[dict[str, Any]]) -> list[Probability]:
+    """Apply baseball rules to each sample before grouping display categories."""
+    balls, strikes = request.count.balls, request.count.strikes
+    counts: dict[str, float] = {}
+    for pitch in pitches:
+        result = product_result(str(pitch.get("result", "")))
+        if result == "ball":
+            label = "Walk" if balls == 3 else f"{balls + 1}-{strikes}"
+        elif result == "ball_in_play":
+            label = "Ball in play"
+        elif result == "hit_by_pitch":
+            label = "Hit by pitch"
+        elif result == "foul" and strikes == 2:
+            label = f"{balls}-{strikes}"
+        else:
+            label = "Strikeout" if strikes == 2 else f"{balls}-{strikes + 1}"
+        counts[label] = counts.get(label, 0) + 1
+    return normalize_probability_map(counts)
 
 
-def pa_forecast(request: PredictionRequest, result_mix: list[Probability]) -> list[Probability]:
-    balls = request.count.balls
-    strikes = request.count.strikes
-    ball = probability_for(result_mix, "Ball")
-    strike = probability_for(result_mix, "Strike/Foul")
-    contact = probability_for(result_mix, "Ball In Play")
-    hbp = probability_for(result_mix, "HBP / Other")
-    walk = ball if balls == 3 else ball * (0.1 + balls * 0.18)
-    strikeout = strike if strikes == 2 else strike * (0.12 + strikes * 0.22)
-    alive = max(0.0, 1.0 - contact - hbp - walk - strikeout)
-    return normalize_probabilities_preserving_labels([
-        Probability(label="Strikeout", probability=strikeout),
-        Probability(label="Walk", probability=walk),
-        Probability(label="Ball in play", probability=contact),
-        Probability(label="Hit by pitch", probability=hbp),
-        Probability(label="Still alive after 8 pitches", probability=alive * 0.45),
-    ])
-
-
-def expected_pitches_remaining(request: PredictionRequest, result_mix: list[Probability]) -> float:
-    terminal = probability_for(result_mix, "Ball In Play") + probability_for(result_mix, "HBP / Other")
-    if request.count.balls == 3:
-        terminal += probability_for(result_mix, "Ball")
-    if request.count.strikes == 2:
-        terminal += probability_for(result_mix, "Strike/Foul") * 0.65
-    return round(max(1.0, min(8.0, 1.0 + (1.0 - terminal) * 3.5)), 1)
+def velocity_estimates(pitches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, list[float]] = {}
+    for pitch in pitches:
+        velocity = finite_or(pitch.get("speed"), None)
+        if velocity is not None:
+            groups.setdefault(product_pitch_type(str(pitch.get("pitch_type", "UN"))), []).append(velocity)
+    return [{"pitchType": kind, "mean": round(sum(values) / len(values), 1), "sampleCount": len(values)} for kind, values in groups.items()]
 
 
 def normalize_probabilities(items: list[Probability]) -> list[Probability]:
@@ -265,7 +261,7 @@ def normalize_probabilities(items: list[Probability]) -> list[Probability]:
     total = sum(item.probability for item in positive)
     if total <= 0:
         raise ValueError("Prediction probability distribution is empty.")
-    normalized = [Probability(label=item.label, probability=round(item.probability / total, 3)) for item in positive if item.probability > 0]
+    normalized = [Probability(label=item.label, probability=item.probability / total) for item in positive if item.probability > 0]
     return sorted(normalized, key=lambda item: item.probability, reverse=True)
 
 
@@ -275,7 +271,7 @@ def normalize_probabilities_preserving_labels(items: list[Probability]) -> list[
     if total <= 0:
         raise ValueError("Prediction probability distribution is empty.")
     normalized = [
-        Probability(label=item.label, probability=round(item.probability / total, 3))
+        Probability(label=item.label, probability=item.probability / total)
         for item in positive
     ]
     return sorted(normalized, key=lambda item: item.probability, reverse=True)
@@ -287,7 +283,7 @@ def normalize_probability_map(values: dict[str, float]) -> list[Probability]:
         raise ValueError("Prediction probability distribution is empty.")
     return sorted(
         [
-            Probability(label=label, probability=round(max(0.0, float(value)) / total, 3))
+            Probability(label=label, probability=max(0.0, float(value)) / total)
             for label, value in values.items()
             if value > 0
         ],
@@ -302,7 +298,7 @@ def normalize_probability_map_preserving_labels(values: dict[str, float]) -> lis
         raise ValueError("Prediction probability distribution is empty.")
     return sorted(
         [
-            Probability(label=label, probability=round(max(0.0, float(value)) / total, 3))
+            Probability(label=label, probability=max(0.0, float(value)) / total)
             for label, value in values.items()
         ],
         key=lambda item: item.probability,
@@ -314,30 +310,30 @@ def location_from_coordinates(px: Any, pz: Any) -> PitchLocation:
     x = finite_or(px, None)
     z = finite_or(pz, None)
     if x is None or z is None:
-        return PitchLocation(px=x, pz=z, zone=None, label="Waste")
+        return PitchLocation(px=x, pz=z, zone=None, label="Untracked")
     if z >= 2.85:
-        label = "Up In" if x < -0.35 else "Up Away" if x > 0.35 else "Up Middle"
+        label = "High left" if x < -0.35 else "High right" if x > 0.35 else "High middle"
     elif z >= 2.0:
-        label = "Middle In" if x < -0.35 else "Middle Away" if x > 0.35 else "Middle"
+        label = "Middle left" if x < -0.35 else "Middle right" if x > 0.35 else "Middle"
     elif z >= 1.35:
-        label = "Low In" if x < -0.35 else "Low Away" if x > 0.35 else "Low Middle"
+        label = "Low left" if x < -0.35 else "Low right" if x > 0.35 else "Low middle"
     elif abs(x) > 0.95:
-        label = "Chase Away"
+        label = "Low wide"
     else:
-        label = "Chase Low"
+        label = "Below zone"
     zone_map = {
-        "Up In": 1,
-        "Up Middle": 2,
-        "Up Away": 3,
-        "Middle In": 4,
+        "High left": 1,
+        "High middle": 2,
+        "High right": 3,
+        "Middle left": 4,
         "Middle": 5,
-        "Middle Away": 6,
-        "Low In": 7,
-        "Low Middle": 8,
-        "Low Away": 9,
-        "Chase Low": 13,
-        "Chase Away": 14,
-        "Waste": None,
+        "Middle right": 6,
+        "Low left": 7,
+        "Low middle": 8,
+        "Low right": 9,
+        "Below zone": 13,
+        "Low wide": 14,
+        "Untracked": None,
     }
     return PitchLocation(px=round(x, 3), pz=round(z, 3), zone=zone_map[label], label=label)  # type: ignore[arg-type]
 
@@ -358,6 +354,8 @@ def model_result(result: PitchResult) -> str:
         "called_strike": "called_strike",
         "whiff": "swinging_strike",
         "foul": "foul",
+        "foul_tip": "foul_tip",
+        "foul_bunt": "foul_bunt",
         "ball_in_play": "hit_into_play",
         "hit_by_pitch": "hit_by_pitch",
     }[result]
@@ -369,13 +367,19 @@ def product_result(result: str) -> PitchResult:
         return "ball"
     if normalized in {"swinging_strike", "swinging_strike_blocked", "missed_bunt", "swinging_pitchout"}:
         return "whiff"
-    if normalized in {"foul", "foul_bunt", "foul_tip", "bunt_foul_tip", "foul_pitchout"}:
+    if normalized in {"foul_tip", "bunt_foul_tip"}:
+        return "foul_tip"
+    if normalized == "foul_bunt":
+        return "foul_bunt"
+    if normalized in {"foul", "foul_pitchout"}:
         return "foul"
     if normalized in {"hit_into_play", "in_play"}:
         return "ball_in_play"
     if normalized == "hit_by_pitch":
         return "hit_by_pitch"
-    return "called_strike"
+    if normalized == "called_strike":
+        return "called_strike"
+    raise ValueError(f"Unsupported model pitch result: {result}")
 
 
 def result_summary(result: PitchResult) -> str:
@@ -394,6 +398,8 @@ def result_description(result: PitchResult) -> str:
         "called_strike": "called strike",
         "whiff": "whiff",
         "foul": "foul",
+        "foul_tip": "foul_tip",
+        "foul_bunt": "foul_bunt",
         "ball_in_play": "ball in play",
         "hit_by_pitch": "hit by pitch",
     }[result]

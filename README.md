@@ -1,205 +1,52 @@
 # Pitch Prediction App
 
-[Live demo](https://baseball.saulrichardson.io) | [Model on Hugging Face](https://huggingface.co/baseball-analytica/pitchpredict-xlstm)
+[Public app](https://baseball.saulrichardson.io) · [xLSTM model](https://huggingface.co/baseball-analytica/pitchpredict-xlstm)
 
-Pitch Prediction App is a serverless MLB next-pitch prediction cockpit.
+Read a real MLB at-bat, one pitch at a time. See the model’s forecast, reveal the
+actual pitch, and move to the next read. The entire at-bat is prepared before it
+is published, so navigation never needs to generate a prediction.
 
-It does one thing: replay a real game pitch by pitch and show what the model
-expected before each pitch was thrown.
+The interface has one primary action, a shared forecast/actual strike zone, a
+compact scoreboard, and optional forecast detail. Back, refresh, retry, and
+replay preserve the same predictions. An anonymous signed cookie owns your place;
+no account is needed.
 
-The main question is:
+## Run a real replay locally
 
-```text
-Given the pitcher, batter, count, bases, inning, score, and recent pitch
-sequence, what is most likely to happen on the next pitch?
-```
-
-The demo defaults to the latest Mets game available from public MLB data. It is
-designed for a baseball manager, analyst, or technical reviewer who wants to see
-whether a model can produce interpretable, game-state-aware reads without
-exposing raw ML plumbing.
-
-## The Product Loop
-
-The app is intentionally centered on one repeated workflow.
-
-1. Start the Mets replay.
-2. See the model's pre-pitch read before the actual pitch is shown.
-3. Reveal the actual pitch.
-4. Compare forecast vs actual: pitch type, probability, location, result,
-   velocity, and resulting game state.
-5. Advance to the next pitch.
-6. The actual pitch becomes part of the sequence history, and the model produces
-   the next read.
-
-That loop turns a historical game into a live-feeling prediction exercise:
-
-```text
-current game state
-  -> model next-pitch read
-  -> actual pitch reveal
-  -> model-vs-actual check
-  -> updated game state
-  -> next model read
-```
-
-The interface is not trying to be a full scouting platform, a counterfactual
-simulator, or a generic machine-learning dashboard. Those ideas may be useful
-later, but the current product is focused on the in-game next-pitch read.
-
-## What The App Shows
-
-The cockpit is organized around the information a manager needs quickly:
-
-- matchup: pitcher, batter, handedness, inning, count, outs, bases, and score
-- pre-pitch read: most likely pitch, pitch mix, likely location, likely result,
-  and next-count pressure
-- forecast vs actual: what the model expected, what was thrown, how plausible it
-  was, and how far the location/velocity missed the model read
-- current at-bat sequence: how this plate appearance reached the current count
-- pitcher pattern: recent pitch behavior before the current plate appearance
-- model detail: the fuller distribution for pitch mix, result forecast, count
-  impact, location density, and plate-appearance direction
-
-Actual pitch details are not sent to the browser before they are revealed. The
-server returns a browser-safe timeline shape, then exposes actual pitch fields
-only after the reveal action.
-
-## How It Works
-
-At a high level, the system has four boundaries.
-
-```text
-MLB public data
-  -> normalized replay timeline
-  -> web/API product state
-  -> model inference service
-  -> prediction view model
-```
-
-The web app owns product behavior:
-
-- loading and normalizing public MLB game data
-- creating the replay timeline
-- advancing through pitches
-- applying baseball state transitions
-- shaping browser-safe timeline responses
-- rendering the manager cockpit
-
-The model service owns model behavior:
-
-- loading the pitch prediction model
-- translating a pitch moment into model inputs
-- running inference
-- returning product-ready prediction data
-- reporting readiness and errors clearly
-
-The browser never calls the model directly. All model calls happen server-side.
-Production does not silently fall back to mock predictions. If the real model is
-not reachable or returns invalid data, the app should report that failure rather
-than pretend a prediction exists.
-
-## System Shape
-
-The canonical demo is a cost-conscious AWS serverless deployment:
-
-- frontend and API: Next.js App Router, React, TypeScript, and Next.js API routes
-- web runtime: Next.js standalone server running in AWS Lambda through Lambda Web Adapter
-- model runtime: separate Python/FastAPI model service deployed as an AWS Lambda container
-- model ownership: dedicated `PitchSequenceModelStack` with an on-demand `live` alias
-- state: DynamoDB for deployed demo storage
-- secrets: AWS Secrets Manager
-- packaging: Amazon ECR container images
-- delivery: CloudFront in front of the web Lambda
-- infrastructure: AWS CDK in TypeScript
-- verification: Vitest, pytest, Playwright, product-flow checks, and GitHub Actions
-
-PostgreSQL support remains in the codebase through the storage boundary, but the
-current public demo uses DynamoDB to avoid standing RDS, VPC, and NAT costs.
-
-## Where To Look First
-
-Start with the product path before reading infrastructure.
-
-- UI cockpit:
-  [`apps/web/src/components/pitch-sequence-lab.tsx`](apps/web/src/components/pitch-sequence-lab.tsx)
-  and [`apps/web/src/components/pitch-sequence-lab/`](apps/web/src/components/pitch-sequence-lab/)
-- API routes:
-  [`apps/web/src/app/api/`](apps/web/src/app/api/)
-- timeline commands:
-  [`apps/web/src/lib/timeline-service.ts`](apps/web/src/lib/timeline-service.ts)
-- browser-safe response shaping:
-  [`apps/web/src/lib/timeline-dto.ts`](apps/web/src/lib/timeline-dto.ts)
-- model adapter:
-  [`apps/web/src/lib/model-service.ts`](apps/web/src/lib/model-service.ts)
-- MLB ingestion and normalization:
-  [`apps/web/src/lib/mlb-service.ts`](apps/web/src/lib/mlb-service.ts)
-  and [`packages/domain/src/mlb.ts`](packages/domain/src/mlb.ts)
-- replay/domain rules:
-  [`packages/domain/src/timeline.ts`](packages/domain/src/timeline.ts)
-  and [`packages/domain/src/state.ts`](packages/domain/src/state.ts)
-- model service:
-  [`services/model-api/`](services/model-api/)
-- storage adapters:
-  [`packages/db/`](packages/db/)
-- AWS infrastructure:
-  [`infra/`](infra/)
-- product verification:
-  [`scripts/verify-product-flows.mjs`](scripts/verify-product-flows.mjs)
-  and [`tests/e2e/`](tests/e2e/)
-
-## Engineering Docs That Guided The Build
-
-The codebase was built from an agentic engineering documentation set. The docs
-matter because the app has multiple trust boundaries: public MLB data, server
-state, model output, browser-visible UI, and AWS deployment.
-
-Read these first:
-
-- [`docs/product-intent.md`](docs/product-intent.md) explains the product focus:
-  an in-game next-pitch predictor, not a broad simulator.
-- [`docs/project-profile.md`](docs/project-profile.md) records the selected
-  stack, current deployment shape, non-goals, and critical invariants.
-- [`docs/adr/0005-refocus-primary-ui-on-next-pitch-prediction.md`](docs/adr/0005-refocus-primary-ui-on-next-pitch-prediction.md)
-  explains why branching and manual scenario controls were moved out of the
-  primary UI.
-- [`docs/adr/0008-adopt-serverless-web-architecture.md`](docs/adr/0008-adopt-serverless-web-architecture.md)
-  explains the serverless AWS architecture and why it replaced the earlier
-  standing App Runner/RDS approach for the canonical demo.
-- [`docs/adr/0012-adopt-serverless-model-stack.md`](docs/adr/0012-adopt-serverless-model-stack.md)
-  explains the final model ownership transition that makes App Runner only a
-  temporary redirect during shutdown.
-- [`docs/contracts/model-service.md`](docs/contracts/model-service.md) defines
-  the boundary between product state and model inference.
-- [`docs/contracts/state-machines.md`](docs/contracts/state-machines.md) defines
-  the replay lifecycle and state transition expectations.
-- [`docs/engineering/doctrine.md`](docs/engineering/doctrine.md) is the
-  operating philosophy: explicit state, typed boundaries, controlled side
-  effects, observable behavior, and reviewable agent-generated changes.
-
-The short version: model output is prediction data, not authority; actual game
-state changes go through explicit domain transitions; and the browser only gets
-data it is allowed to show.
-
-## Run Locally
-
-Install dependencies:
+Requires Node 24+, npm 11+, Python, and `uv`.
 
 ```bash
 npm ci
+# In one terminal, start the real model service:
+PITCHPREDICT_ALGORITHM=xlstm PITCHPREDICT_SAMPLE_SIZE=8 \
+  uv run --directory services/model-api uvicorn pitch_model_api.main:app \
+  --app-dir src --host 127.0.0.1 --port 8000
 ```
 
-Run the web app:
+In another terminal, prepare and save a complete edition:
 
 ```bash
-npm run dev
+MODEL_BACKEND=http MODEL_BASE_URL=http://127.0.0.1:8000 \
+  npm run prepare:replay -- \
+  --model-artifact '<immutable checkpoint + normalizer revision + sample settings>' \
+  --output .cache/replay.json
+
+REPLAY_EDITION_PATH="$PWD/.cache/replay.json" \
+  SESSION_SECRET=local-development-secret npm run dev
 ```
 
-The product expects a real model service for predictions. Local UI work may use
-local infrastructure, but production behavior must not return mock predictions
-as if they were real model output.
+The publisher selects the first complete at-bat of 3–8 pitches from the latest
+completed Mets game in the past 21 days. `--game <MLB gamePk>` selects a specific
+completed game. Selection never uses prediction accuracy or a desirable outcome.
+Local preparation saves each successful forecast in `.cache/replay-preparation`;
+retrying resumes partial work. Keep the same artifact identifier when retrying.
+A new model, normalizer, or sampling configuration requires a new identifier.
 
-Useful checks:
+The artifact identifier records operator provenance. It is not a cryptographic
+attestation of the remote runtime; use an immutable Lambda version or pinned
+checkpoint and retain the saved requests and responses for review.
+
+## Verify
 
 ```bash
 npm run typecheck
@@ -207,24 +54,73 @@ npm test
 npm run test:model
 npm run lint
 npm run build
+npm run infra:synth
+npm run verify:local
+npm run test:e2e
 ```
 
-Verify the deployed product flow:
+`verify:local` starts an isolated local web server with a clearly marked test
+edition, exercises the HTTP workflow, and shuts it down. `test:e2e` covers
+laptop and phone layouts, navigation, completion, refresh, offline retry, and a
+lost response. It uses the same deterministic fixture; it does not call a model.
+Install its browser once with `npx playwright install chromium`.
+
+For real-model verification, start the web app with a prepared real edition and
+run `BASE_URL=http://localhost:3000 npm run verify:product`. This checks ownership,
+redaction, idempotency, concurrency, completion, and command latency without
+invoking the model. The default maximum command latency is 2 seconds; override
+`VERIFY_MAX_COMMAND_MS` only for an explicit environment requirement.
+
+PostgreSQL integration checks run when `TEST_POSTGRES_URL` points to a disposable,
+already migrated database. CI provisions one. Run migrations explicitly with
+`DATABASE_URL=... npm run db:migrate`; web requests never apply migrations.
+
+## Publish and deliver
+
+Review the saved edition before moving the featured pointer:
 
 ```bash
-BASE_URL=https://baseball.saulrichardson.io npm run verify:product
+STORAGE_MODE=dynamodb DYNAMODB_TABLE_NAME=pitch-sequence-serverless-state \
+  npm run publish:replay -- --input .cache/replay.json
+
+STORAGE_MODE=dynamodb DYNAMODB_TABLE_NAME=pitch-sequence-serverless-state \
+  npm run publish:replay -- --check
 ```
 
-## Current Non-Goals
+A known edition can be restored with `--edition <saved-id>`. Publication is a
+conditional pointer update; existing sessions stay attached to their edition.
+Test fixtures are rejected by the publication CLI. The operator can also use
+`prepare:replay --publish` with durable storage when review is handled by the
+operator’s workflow.
 
-These are deliberately outside the primary v1 experience:
+Follow [the delivery runbook](docs/records/2026-09-12-prepared-replay-delivery.md)
+for the first production cutover. Deploy the model contract, prepare and publish
+a valid edition, then deploy the web application. Existing production timelines
+use the old contract and will start a new replay after cutover; their historical
+records are retained. The repository refactor does not itself update production.
 
-- counterfactual branching in the main cockpit
-- manual situation entry in the main cockpit
-- individual user accounts
-- mobile app development
-- full batted-ball simulation
-- hosting model internals inside the web/API process
+## Architecture
 
-The product should stay focused until the next-pitch replay loop is clearly
-useful, reliable, and easy to explain.
+- `apps/web/src/components/pitch-sequence-lab.tsx`: the comparison interface.
+- `apps/web/src/components/replay/`: interaction, recovery, formatting, and plot.
+- `packages/domain/src/replay.ts`: immutable editions, cursor transitions,
+  publication validation, and browser response shaping.
+- `apps/web/src/lib/replay-service.ts`: workspace ownership and conditional writes.
+- `packages/db/src/storage/`: authoritative DynamoDB, PostgreSQL, and local memory adapters.
+- `scripts/lib/preparation.ts`: resumable inference, lease, budget, and publication.
+- `services/model-api/`: real xLSTM inference and normalization.
+- `infra/`: CloudFront, web Lambda, DynamoDB, and separate model Lambda stacks.
+
+Public routes are `/api/replays` and `/api/replays/[id]`. The web Lambda has no
+model invocation permission. Every prediction is saved with its pre-pitch input;
+future actuals remain on the server until reveal. The default operator budget is
+20 model attempts per UTC day and 400 per UTC month, enforced atomically by the
+chosen storage. Public replay navigation consumes no model budget.
+
+The deployment retains on-demand model concurrency 1, provisioned concurrency 0,
+web concurrency 10, bounded DynamoDB throughput, one-day logs, CloudFront origin
+access control, and the configured geography. Those controls constrain usage;
+they are not a billing guarantee.
+
+See [product intent](docs/product-intent.md), [approach](docs/approach.md), and
+[project records](docs/records/) for the current operating model and rationale.

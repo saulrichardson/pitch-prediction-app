@@ -1,151 +1,70 @@
 # Product Intent
 
-This is the project-owned place for describing what the product is actually
-trying to become.
+Pitch Prediction App makes a real MLB at-bat readable, one pitch ahead.
+The user sees a forecast, reveals the actual pitch, and compares the two. The
+experience should feel immediate, deliberate, and easy to understand without
+instructions surrounding every action.
 
-Use it for raw thoughts, product narrative, desired functionality, workflow
-ideas, model-service behavior, constraints, examples, open questions, and notes
-that are not yet ready to become formal contracts or ADRs.
+## Product Direction
 
-This file may be messy while the product is still being understood. It should
-be useful to humans and coding agents trying to understand the goal behind the
-work.
+The primary experience is a complete, prepared at-bat of 3–8 pitches from a
+completed Mets game. The operator chooses a game and publishes a complete
+edition; the default is the latest completed game available within 21 days.
+An edition is selected for a coherent sequence, never for a flattering model
+result. A small complete experience is the unit of delivery.
 
-## Raw Notes
+A replay is ready before the user starts. Opening it, revealing a pitch,
+advancing, going back, refreshing, and restarting use the saved edition. Model
+inference is publication work. It is never part of a replay command.
 
-- Pitch Prediction App is now focused on in-game and replay next-pitch
-  prediction.
-- The user loads a real MLB game, steps through it pitch by pitch as if it were
-  live, sees what the model expected before each actual pitch, then uses one
-  primary game-step button to reveal what happened and advance to the next
-  prediction.
-- Counterfactual branching and manual current-situation setup are outside the
-  active v1 web/API surface. The first product surface should not ask managers
-  to enter game state by hand or manage generated branches.
-- The first demo defaults to the latest Mets game available from public MLB
-  data.
+## Core Workflow
 
-## Product Narrative
+1. See the featured matchup, game date, and number of pitches.
+2. Start the replay and read the leading forecast with two alternatives.
+3. Reveal the actual pitch on the same comparison surface.
+4. Advance to the next saved forecast.
+5. Finish the at-bat, see the result and match count, and replay if desired.
 
-What are we building, for whom, and why?
+The main action changes from **Reveal pitch** to **Next pitch** to **Replay
+again**. Back reverses one replay step. Refresh restores the same place. A failed
+request has one retry action and preserves the last acknowledged view.
 
-Pitch Prediction App is a compact in-game prediction cockpit. It answers:
-given this pitcher, batter, game state, and pitch history, what is most likely
-on the next pitch?
+## Interface Principles
 
-The product should feel like a live read, not a simulator dashboard. Its core
-loop is:
+- The matchup and count provide context; the forecast and actual comparison are
+  the focal point.
+- One primary action stays in a stable location. Phone controls stay reachable.
+- A shared strike zone makes differences visible. Forecast and actual keep
+  distinct colors and the same coordinate frame.
+- Secondary distributions and methodology are available on demand.
+- Copy names the next action or the current problem. Routine infrastructure,
+  caveats, repeated readiness assurances, and invented confidence labels do not
+  occupy the main experience.
+- Use the navy/orange baseball identity with restrained typography, spacing,
+  contrast, and support for light, dark, and reduced-motion preferences.
 
-```text
-current game state
-  -> model next-pitch read
-  -> actual pitch reveal
-  -> model-vs-actual score
-  -> next pitch read
-```
+## Prediction Integrity
 
-The main replay control alternates by state:
+Forecasts come from the real model. Each edition saves the request and response
+for every pitch; history stops before the pitch being predicted. Hidden actual
+pitch facts and final game scores stay on the server until reveal.
 
-```text
-prediction visible, actual hidden -> click Reveal Actual
-actual visible, model scored      -> click Next Pitch
-next prediction visible           -> repeat
-```
+Pitch-type probabilities identify whether they came from the model distribution
+or sample frequencies. Location, result, count, and velocity estimates use the
+returned samples. Missing measurements stay missing. Small probabilities remain
+visible as `<1%`. A two-strike ordinary foul keeps the count alive; foul tips and
+bunt fouls use their actual baseball rules. No plate-appearance outcome is
+invented from pitch-level probabilities.
 
-## Desired Functionality
+## Users And Boundaries
 
-What should the product let users do?
+Baseball analysts, coaches, fans, and technical evaluators should be able to
+judge what the model expected and how it compared with a real sequence.
+Individual accounts, manual scenario input, counterfactual branching, full-game
+navigation, live inference, and batted-ball simulation are outside this primary
+experience. A future expansion must preserve the immediate, coherent replay.
 
-- Load a real Mets game and replay it pitch by pitch.
-- See model predictions before actual pitches are revealed.
-- Step the replay with one primary button that alternates between reveal and
-  advance.
-- Score actual pitches against model expectation.
-- Give decision makers a compact manager read: model confidence, top-two pitch
-  concentration, likely location, likely pitch-level result, and count impact.
-- Keep the previous pitch's model-vs-actual check visible after advancing so a
-  user can calibrate the model while reading the next pitch.
-- Inspect secondary model detail such as pitch-level result and count impact
-  when needed, without making those details dominate the default screen.
-
-## Users And Jobs
-
-Who uses this system, and what job are they trying to get done?
-
-Primary users are baseball analysts, coaches, technical evaluators, and
-baseball decision makers who want a fast read on what the model expects next
-from the current pitcher, batter, count, game state, and prior sequence.
-
-## Model Service Role
-
-What role should the pitch model service play?
-
-What should they never decide or do?
-
-The separate pitch model is a prediction service, not an authority. The app
-validates model responses and uses deterministic domain rules for timeline
-state changes.
-
-## Core Workflows
-
-What are the most important end-to-end workflows?
-
-- Real game replay: load latest Mets game, predict before reveal, click the
-  game-step button to reveal actual, click the same button again to append that
-  actual pitch into history and compute the next prediction.
-- Model readiness: make real-model-ready and unavailable states clear. The
-  product should not provide substitute predictions when the real model is not
-  working.
-- Scenario analysis may return later as a separate module, but it should not
-  crowd the in-game prediction UI or leak into the v1 replay API surface.
-
-## Boundaries And Non-Goals
-
-What should stay out of scope?
-
-What behavior would make the product confusing, unsafe, or untrustworthy?
-
-- V1 does not host model weights or expose model plumbing to the browser.
-- V1 does not provide full batted-ball simulation after ball in play.
-- V1 does not include individual user accounts or large-scale collaboration.
-- Main UI should avoid raw IDs, logits, embeddings, or request JSON unless a
-  detail panel is explicitly opened.
-- Main UI should not expose counterfactual branch controls, generated pitch
-  cards, or branch comparison controls. Those belong in a separate scenario
-  module if the product later returns to counterfactual analysis.
-- Main UI should not expose manual state-entry controls. Those belong in a
-  separate setup or scouting module if the product returns to manual prediction.
-
-## Examples
-
-Representative examples, scenarios, sample inputs, sample outputs, or sketches:
-
-- Before reveal: the app shows `Most likely SI 35%`, likely location `Middle
-  Away`, and top alternatives.
-- After reveal: the app shows `Actual was FF called strike`, the model rank and
-  probability for `FF`, the result probability, and an expectedness label.
-- On the next click: the previous pitch is appended to actual history and the
-  next real pitch receives a fresh model prediction.
-
-## Open Questions
-
-- Which real model service URL and authentication scheme will production use?
-- What retention policy should anonymous workspace sessions use?
-
-## Promote Stable Facts
-
-When a note here becomes stable and important, move or summarize it into the
-right durable artifact:
-
-- `docs/project-profile.md` for concise project facts, constraints, users,
-  stack choices, invariants, and non-goals
-- `docs/templates/feature-brief.md` for a specific feature before implementation
-- `docs/adr/` for architecture, stack, policy, persistence, or workflow decisions
-- `docs/contracts/` for state machines, model-service behavior, policy inputs,
-  side-effect capabilities, workflow events, and telemetry events
-- `docs/security/threat-model.md` for security and abuse-risk assumptions
-
-Coding agents may use this file to understand intent, but this file is not by
-itself an execution contract. Important behavior should be promoted into the
-project profile, contracts, feature briefs, tests, or ADRs before implementation
-depends on it.
+Anonymous sessions last 14 days. Existing editions remain available to their
+sessions when a new feature is published. Publication failures leave the prior
+feature available. There is no product promise that the feature updates daily
+until a publication schedule is implemented and operated.

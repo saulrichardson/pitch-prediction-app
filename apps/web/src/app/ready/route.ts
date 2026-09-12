@@ -1,30 +1,32 @@
 import { NextResponse } from "next/server";
-import { checkDynamoDb, getReadyDb, getStorageMode, type StorageMode } from "@pitch/db";
-import { modelReadiness } from "@/lib/model-service";
+import { getStorageMode } from "@pitch/db";
+import { getReplayService } from "@/lib/replay-service";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const model = await modelReadiness();
-  const storage = await storageHealth();
-  const ready = storage.status !== "unavailable" && model !== "unavailable";
-
-  return NextResponse.json(
-    {
-      status: ready ? "ok" : "unavailable",
-      storageMode: storage.mode,
-      database: storage.status,
-      model
-    },
-    { status: ready ? 200 : 503 }
-  );
-}
-
-async function storageHealth(): Promise<{ mode: StorageMode | null; status: "configured" | "memory" | "unavailable" }> {
   try {
-    const mode = getStorageMode();
-    if (mode === "memory") return { mode, status: "memory" };
-    if (mode === "dynamodb") return { mode, status: await checkDynamoDb() ? "configured" : "unavailable" };
-    return { mode, status: await getReadyDb() ? "configured" : "unavailable" };
-  } catch {
-    return { mode: null, status: "unavailable" };
+    const edition = await (await getReplayService()).featured();
+    return NextResponse.json(
+      {
+        status: "ok",
+        storageMode: getStorageMode(),
+        editionId: edition.id,
+        pitchCount: edition.pitchCount,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "readiness_failed",
+        message:
+          error instanceof Error ? error.message : "Unknown readiness failure",
+      }),
+    );
+    return NextResponse.json(
+      { status: "unavailable", code: "replay_unavailable" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
   }
 }

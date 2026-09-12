@@ -1,18 +1,23 @@
-export type PitchType = "FF" | "SI" | "SL" | "CH" | "CU" | "FC" | "FS" | "Other";
+export type PitchType =
+  "FF" | "SI" | "SL" | "CH" | "CU" | "FC" | "FS" | "Other";
 
 export type PitchResult =
   | "ball"
   | "called_strike"
   | "whiff"
   | "foul"
+  | "foul_tip"
+  | "foul_bunt"
   | "ball_in_play"
   | "hit_by_pitch";
 
 export type TimelinePitchSource = "actual";
 
-export type TerminalState = "strikeout" | "walk" | "hit_by_pitch" | "ball_in_play";
+export type TerminalState =
+  "strikeout" | "walk" | "hit_by_pitch" | "ball_in_play";
 
-export type RevealLabel = "Expected" | "Plausible" | "Surprising" | "Very Surprising";
+export type RevealLabel =
+  "Expected" | "Plausible" | "Surprising" | "Very Surprising";
 
 export type BaseState = {
   first: boolean;
@@ -66,18 +71,18 @@ export type PitchLocation = {
 };
 
 export type LocationBucket =
-  | "Up In"
-  | "Up Middle"
-  | "Up Away"
-  | "Middle In"
+  | "High left"
+  | "High middle"
+  | "High right"
+  | "Middle left"
   | "Middle"
-  | "Middle Away"
-  | "Low In"
-  | "Low Middle"
-  | "Low Away"
-  | "Chase Low"
-  | "Chase Away"
-  | "Waste";
+  | "Middle right"
+  | "Low left"
+  | "Low middle"
+  | "Low right"
+  | "Below zone"
+  | "Low wide"
+  | "Untracked";
 
 export type PitchShape = {
   velocity: number | null;
@@ -104,7 +109,13 @@ export type PitchEvent = {
 
 export type PitchMoment = Pick<
   PitchEvent,
-  "id" | "paId" | "pitchNumber" | "gamePitchIndex" | "source" | "preState" | "matchup"
+  | "id"
+  | "paId"
+  | "pitchNumber"
+  | "gamePitchIndex"
+  | "source"
+  | "preState"
+  | "matchup"
 >;
 
 export type GameSummary = {
@@ -130,7 +141,7 @@ export type Probability = {
 
 export type PossiblePitch = {
   pitchType: PitchType;
-  velocity: number;
+  velocity: number | null;
   location: PitchLocation;
   result: PitchResult;
   description: string;
@@ -159,14 +170,15 @@ export type PredictionResponse = {
   id: string;
   modelVersion: string;
   pitchMix: Probability[];
+  pitchMixSource: "model" | "samples";
   resultMix: Probability[];
   location: {
     density: Probability[];
     expected: PitchLocation;
   };
   countImpact: Probability[];
-  paForecast: Probability[];
-  expectedPitchesRemaining: number;
+  sampleSize: number;
+  velocity: Array<{ pitchType: PitchType; mean: number; sampleCount: number }>;
   possiblePitches: PossiblePitch[];
   createdAt: string;
 };
@@ -181,56 +193,3 @@ export type PitchEvaluation = {
   velocityErrorMph: number | null;
   label: RevealLabel;
 };
-
-export type ActualPitchForecast = {
-  pitchId: string;
-  pitchIndex: number;
-  prediction: PredictionResponse;
-  evaluation: PitchEvaluation;
-};
-
-export type Timeline = {
-  id: string;
-  workspaceId: string;
-  mode: "real-game";
-  game: GameSummary;
-  actualPitches: PitchEvent[];
-  currentPitchIndex: number;
-  actualHistory: PitchEvent[];
-  actualForecastHistory: ActualPitchForecast[];
-  actualPrediction: PredictionResponse;
-  actualRevealed: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ClientTimeline = Omit<Timeline, "actualPitches"> & {
-  currentPitch: PitchMoment | null;
-  nextPitchContext: PitchMoment | null;
-  actualPitchCount: number;
-};
-
-export type TimelineStartJobStatus = "pending" | "running" | "succeeded" | "failed";
-
-export type TimelineStartJobError = {
-  message: string;
-  code: string;
-};
-
-export type TimelineStartJob = {
-  id: string;
-  workspaceId: string;
-  gamePk: string;
-  status: TimelineStartJobStatus;
-  timelineId: string | null;
-  error: TimelineStartJobError | null;
-  attempts: number;
-  leaseToken: string | null;
-  leaseExpiresAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-};
-
-export type ClientTimelineStartJob = Omit<TimelineStartJob, "workspaceId" | "leaseToken" | "leaseExpiresAt">;

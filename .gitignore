@@ -26,6 +26,7 @@ playwright-report/
 test-results/
 cdk.out/
 .playwright-cli/
+.playwright-mcp/
 output/playwright/
 services/model-api/.venv/
 services/model-api/.pytest_cache/

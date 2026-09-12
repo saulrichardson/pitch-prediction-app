@@ -1,5 +1,8 @@
 FROM python:3.13-slim AS runtime
 
+# The Python Runtime Interface Client below implements Lambda's SnapStart
+# lifecycle API for this custom base image, including registered restore hooks.
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -13,6 +16,11 @@ ENV PYBASEBALL_CACHE=/tmp/pybaseball-cache
 ENV PITCHPREDICT_MODEL_DIR=/tmp/pitchpredict-model
 ENV PITCHPREDICT_CACHE_DIR=/tmp/pitchpredict-cache
 ENV PITCHPREDICT_LOG_DIR=/tmp/pitchpredict-logs
+ENV PITCHPREDICT_XLSTM_PATH=/opt/pitchpredict-xlstm
+
+ARG PITCHPREDICT_XLSTM_REVISION=97a87376621182e14cbd9c5b6c21077189b7df64
+ARG PITCHPREDICT_XLSTM_CONFIG_SHA256=442765f61673e0d0482f3aa0641079751fceef638deb242cc3940fb2ce127661
+ARG PITCHPREDICT_XLSTM_MODEL_SHA256=6100319982d0ce56a074f72289ae043468e0a7b0148e4b81706ca834e4bd748d
 
 WORKDIR /var/task
 
@@ -20,13 +28,33 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
+# Keep the first user request off the Hugging Face download path. The revision
+# and file digests make the deployed model artifact reproducible and fail the
+# image build loudly if the checkpoint does not match what was reviewed.
+RUN mkdir -p "${PITCHPREDICT_XLSTM_PATH}" \
+  && curl --fail --location --retry 3 \
+    "https://huggingface.co/baseball-analytica/pitchpredict-xlstm/resolve/${PITCHPREDICT_XLSTM_REVISION}/config.json" \
+    --output "${PITCHPREDICT_XLSTM_PATH}/config.json" \
+  && echo "${PITCHPREDICT_XLSTM_CONFIG_SHA256}  ${PITCHPREDICT_XLSTM_PATH}/config.json" | sha256sum --check --strict \
+  && curl --fail --location --retry 3 \
+    "https://huggingface.co/baseball-analytica/pitchpredict-xlstm/resolve/${PITCHPREDICT_XLSTM_REVISION}/model.safetensors" \
+    --output "${PITCHPREDICT_XLSTM_PATH}/model.safetensors" \
+  && echo "${PITCHPREDICT_XLSTM_MODEL_SHA256}  ${PITCHPREDICT_XLSTM_PATH}/model.safetensors" | sha256sum --check --strict
+
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.11.0"
 RUN pip install --no-cache-dir \
-  "awslambdaric>=3.1.1" \
+  "awslambdaric>=4.0.2,<5" \
   "fastapi>=0.121.0" \
-  "pitchpredict==0.5.0" \
-  "pydantic>=2.12.0"
+  "numpy>=2.3.4" \
+  "pydantic>=2.12.0" \
+  "safetensors>=0.4.3"
+RUN pip install --no-cache-dir --no-deps "pitchpredict==0.5.0"
+
+# The upstream algorithms package eagerly imports the similarity/Statcast
+# implementation. This Lambda serves xLSTM only, so keep that package import
+# narrow and avoid loading unused pandas/PyArrow/SciPy dependencies.
+COPY docker/pitchpredict-algs-init.py /usr/local/lib/python3.13/site-packages/pitchpredict/backend/algs/__init__.py
 
 COPY src ./src
 

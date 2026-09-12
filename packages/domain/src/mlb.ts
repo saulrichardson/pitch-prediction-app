@@ -1,15 +1,11 @@
-import {
-  bucketFromZone,
-  emptyBases,
-  normalizeStrikeZoneBounds
-} from "./state";
+import { bucketFromZone, emptyBases, normalizeStrikeZoneBounds } from "./state";
 import type {
   GameReplay,
   GameState,
   Matchup,
   PitchEvent,
   PitchResult,
-  PitchType
+  PitchType,
 } from "./types";
 
 type MlbGame = Record<string, unknown>;
@@ -29,18 +25,23 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
     outs: 0,
     bases: { ...emptyBases },
     awayScore: 0,
-    homeScore: 0
+    homeScore: 0,
   };
 
   for (const play of plays) {
     const about = objectAt(play, "about");
     const matchup = normalizeMatchup(objectAt(play, "matchup"));
     const playEvents = arrayAt(valueAt(play, "playEvents"));
-    const pitchEvents = playEvents.filter((event) => booleanAt(event, "isPitch", false));
+    const pitchEvents = playEvents.filter((event) =>
+      booleanAt(event, "isPitch", false),
+    );
     let pitchNumberInPlay = 0;
     const frame = {
       inning: numberAt(about, "inning", currentState.inning),
-      half: stringAt(about, "halfInning", currentState.half) === "bottom" ? "bottom" as const : "top" as const
+      half:
+        stringAt(about, "halfInning", currentState.half) === "bottom"
+          ? ("bottom" as const)
+          : ("top" as const),
     };
     currentState = {
       ...currentState,
@@ -48,7 +49,9 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
       half: frame.half,
       count: zeroCount(),
       outs: sameFrame(currentState, frame) ? currentState.outs : 0,
-      bases: sameFrame(currentState, frame) ? currentState.bases : { ...emptyBases }
+      bases: sameFrame(currentState, frame)
+        ? currentState.bases
+        : { ...emptyBases },
     };
 
     for (const event of playEvents) {
@@ -74,14 +77,14 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
         bottom: nullableNumberAt(pitchData, "strikeZoneBottom"),
         width: nullableNumberAt(pitchData, "strikeZoneWidth"),
         depth: nullableNumberAt(pitchData, "strikeZoneDepth"),
-        source: "measured"
+        source: "measured",
       });
       const eventCount = objectAt(event, "count");
       const preState: GameState = {
         ...currentState,
         outs: currentState.outs,
         count: { ...currentState.count },
-        bases: { ...currentState.bases }
+        bases: { ...currentState.bases },
       };
       const isFinalPitchOfPlay = pitchNumberInPlay === pitchEvents.length;
       const postState = isFinalPitchOfPlay
@@ -101,7 +104,7 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
           pz,
           zone,
           label: bucketFromZone(zone, px, pz),
-          strikeZone
+          strikeZone,
         },
         shape: {
           velocity: nullableNumberAt(pitchData, "startSpeed"),
@@ -110,7 +113,7 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
             x0: nullableNumberAt(coordinates, "x0"),
             y0: nullableNumberAt(coordinates, "y0"),
             z0: nullableNumberAt(coordinates, "z0"),
-            extension: nullableNumberAt(pitchData, "extension")
+            extension: nullableNumberAt(pitchData, "extension"),
           },
           movement: {
             vx0: nullableNumberAt(coordinates, "vX0"),
@@ -125,13 +128,13 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
             breakAngle: nullableNumberAt(breaks, "breakAngle"),
             breakLength: nullableNumberAt(breaks, "breakLength"),
             breakHorizontal: nullableNumberAt(breaks, "breakHorizontal"),
-            breakVertical: nullableNumberAt(breaks, "breakVertical")
-          }
+            breakVertical: nullableNumberAt(breaks, "breakVertical"),
+          },
         },
         preState,
         postState,
         matchup,
-        description: stringAt(details, "description", "")
+        description: stringAt(details, "description", ""),
       };
 
       pitches.push(pitch);
@@ -145,16 +148,34 @@ export function normalizeMlbLiveFeed(feed: MlbGame): GameReplay {
 
   return {
     game: {
-      gamePk: String(valueAt(feed, "gamePk") ?? valueAt(gameData, "gamePk") ?? "unknown"),
+      gamePk: String(
+        valueAt(feed, "gamePk") ?? valueAt(gameData, "gamePk") ?? "unknown",
+      ),
       label: `${teamLabel(away, "Away")} @ ${teamLabel(home, "Home")}`,
-      officialDate: stringAt(objectAt(gameData, "datetime"), "officialDate", new Date().toISOString().slice(0, 10)),
+      officialDate: stringAt(
+        objectAt(gameData, "datetime"),
+        "officialDate",
+        new Date().toISOString().slice(0, 10),
+      ),
       awayTeam: stringAt(away, "name", "Away"),
       homeTeam: stringAt(home, "name", "Home"),
-      awayScore: numberAt(objectAt(objectAt(objectAt(liveData, "linescore"), "teams"), "away"), "runs", 0),
-      homeScore: numberAt(objectAt(objectAt(objectAt(liveData, "linescore"), "teams"), "home"), "runs", 0),
-      status: stringAt(objectAt(objectAt(gameData, "status"), "detailedState"), "description", stringAt(objectAt(gameData, "status"), "detailedState", "Unknown"))
+      awayScore: numberAt(
+        objectAt(objectAt(objectAt(liveData, "linescore"), "teams"), "away"),
+        "runs",
+        0,
+      ),
+      homeScore: numberAt(
+        objectAt(objectAt(objectAt(liveData, "linescore"), "teams"), "home"),
+        "runs",
+        0,
+      ),
+      status: stringAt(
+        objectAt(objectAt(gameData, "status"), "detailedState"),
+        "description",
+        stringAt(objectAt(gameData, "status"), "detailedState", "Unknown"),
+      ),
     },
-    pitches
+    pitches,
   };
 }
 
@@ -162,32 +183,49 @@ function zeroCount(): GameState["count"] {
   return { balls: 0, strikes: 0 };
 }
 
-function sameFrame(state: GameState, frame: Pick<GameState, "inning" | "half">): boolean {
+function sameFrame(
+  state: GameState,
+  frame: Pick<GameState, "inning" | "half">,
+): boolean {
   return state.inning === frame.inning && state.half === frame.half;
 }
 
-function nonTerminalPostState(preState: GameState, eventCount: Record<string, unknown>): GameState {
+function nonTerminalPostState(
+  preState: GameState,
+  eventCount: Record<string, unknown>,
+): GameState {
   return {
     ...preState,
     count: {
       balls: clampBalls(numberAt(eventCount, "balls", preState.count.balls)),
-      strikes: clampStrikes(numberAt(eventCount, "strikes", preState.count.strikes))
-    }
+      strikes: clampStrikes(
+        numberAt(eventCount, "strikes", preState.count.strikes),
+      ),
+    },
   };
 }
 
-function nonPitchEventState(state: GameState, event: Record<string, unknown>): GameState {
+function nonPitchEventState(
+  state: GameState,
+  event: Record<string, unknown>,
+): GameState {
   const eventCount = objectAt(event, "count");
   const eventOuts = nullableNumberAt(eventCount, "outs");
   const runners = arrayAt(valueAt(event, "runners"));
   return {
     ...state,
     outs: eventOuts === null ? state.outs : clampOuts(eventOuts),
-    bases: runners.length > 0 ? basesAfterRunnerMovements(state.bases, runners) : state.bases
+    bases:
+      runners.length > 0
+        ? basesAfterRunnerMovements(state.bases, runners)
+        : state.bases,
   };
 }
 
-function finalStateForPlay(play: Record<string, unknown>, preState: GameState): GameState {
+function finalStateForPlay(
+  play: Record<string, unknown>,
+  preState: GameState,
+): GameState {
   const playCount = objectAt(play, "count");
   const result = objectAt(play, "result");
   const outs = numberAt(playCount, "outs", preState.outs);
@@ -195,15 +233,22 @@ function finalStateForPlay(play: Record<string, unknown>, preState: GameState): 
     ...preState,
     count: zeroCount(),
     outs: clampOuts(outs),
-    bases: outs >= 3
-      ? { ...emptyBases }
-      : basesAfterRunnerMovements(preState.bases, arrayAt(valueAt(play, "runners"))),
+    bases:
+      outs >= 3
+        ? { ...emptyBases }
+        : basesAfterRunnerMovements(
+            preState.bases,
+            arrayAt(valueAt(play, "runners")),
+          ),
     awayScore: numberAt(result, "awayScore", preState.awayScore),
-    homeScore: numberAt(result, "homeScore", preState.homeScore)
+    homeScore: numberAt(result, "homeScore", preState.homeScore),
   };
 }
 
-function basesAfterRunnerMovements(startBases: GameState["bases"], runners: Record<string, unknown>[]): GameState["bases"] {
+function basesAfterRunnerMovements(
+  startBases: GameState["bases"],
+  runners: Record<string, unknown>[],
+): GameState["bases"] {
   const bases = { ...startBases };
   const destinations: Array<keyof GameState["bases"]> = [];
   for (const runner of runners) {
@@ -231,31 +276,54 @@ function baseKey(base: string | null): keyof GameState["bases"] | null {
 
 function normalizeMatchup(matchup: Record<string, unknown>): Matchup {
   return {
-    pitcherId: String(valueAt(objectAt(matchup, "pitcher"), "id") ?? "unknown-pitcher"),
-    pitcherName: stringAt(objectAt(matchup, "pitcher"), "fullName", "Unknown pitcher"),
+    pitcherId: String(
+      valueAt(objectAt(matchup, "pitcher"), "id") ?? "unknown-pitcher",
+    ),
+    pitcherName: stringAt(
+      objectAt(matchup, "pitcher"),
+      "fullName",
+      "Unknown pitcher",
+    ),
     pitcherHand: handCode(objectAt(matchup, "pitchHand")),
-    batterId: String(valueAt(objectAt(matchup, "batter"), "id") ?? "unknown-batter"),
-    batterName: stringAt(objectAt(matchup, "batter"), "fullName", "Unknown batter"),
-    batterSide: handCode(objectAt(matchup, "batSide"))
+    batterId: String(
+      valueAt(objectAt(matchup, "batter"), "id") ?? "unknown-batter",
+    ),
+    batterName: stringAt(
+      objectAt(matchup, "batter"),
+      "fullName",
+      "Unknown batter",
+    ),
+    batterSide: handCode(objectAt(matchup, "batSide")),
   };
 }
 
 function normalizePitchType(type: Record<string, unknown>): PitchType {
   const code = stringAt(type, "code", "Other");
-  if (["FF", "SI", "SL", "CH", "CU", "FC", "FS"].includes(code)) return code as PitchType;
+  if (["FF", "SI", "SL", "CH", "CU", "FC", "FS"].includes(code))
+    return code as PitchType;
   return "Other";
 }
 
 function normalizeResult(details: Record<string, unknown>): PitchResult {
   const code = stringAt(details, "code", "");
-  const description = stringAt(objectAt(details, "call"), "description", stringAt(details, "description", "")).toLowerCase();
-  if (code === "H" || description.includes("hit by pitch")) return "hit_by_pitch";
-  if (booleanAt(details, "isInPlay", false) || code === "X") return "ball_in_play";
+  const description = stringAt(
+    objectAt(details, "call"),
+    "description",
+    stringAt(details, "description", ""),
+  ).toLowerCase();
+  if (code === "H" || description.includes("hit by pitch"))
+    return "hit_by_pitch";
+  if (booleanAt(details, "isInPlay", false) || code === "X")
+    return "ball_in_play";
+  if (description.includes("foul tip")) return "foul_tip";
+  if (description.includes("foul bunt")) return "foul_bunt";
   if (description.includes("foul")) return "foul";
-  if (description.includes("swinging") || description.includes("miss")) return "whiff";
+  if (description.includes("swinging") || description.includes("miss"))
+    return "whiff";
   if (booleanAt(details, "isBall", false) || code === "B") return "ball";
-  if (booleanAt(details, "isStrike", false) || code === "C" || code === "S") return "called_strike";
-  return "called_strike";
+  if (booleanAt(details, "isStrike", false) || code === "C" || code === "S")
+    return "called_strike";
+  throw new Error(`Unsupported MLB pitch result: ${code} ${description}`);
 }
 
 function handCode(value: Record<string, unknown>): Matchup["pitcherHand"] {
@@ -265,15 +333,24 @@ function handCode(value: Record<string, unknown>): Matchup["pitcherHand"] {
 
 function objectAt(value: unknown, key: string): Record<string, unknown> {
   const nested = valueAt(value, key);
-  return nested && typeof nested === "object" && !Array.isArray(nested) ? nested as Record<string, unknown> : {};
+  return nested && typeof nested === "object" && !Array.isArray(nested)
+    ? (nested as Record<string, unknown>)
+    : {};
 }
 
 function arrayAt(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") as Record<string, unknown>[] : [];
+  return Array.isArray(value)
+    ? (value.filter((item) => item && typeof item === "object") as Record<
+        string,
+        unknown
+      >[])
+    : [];
 }
 
 function valueAt(value: unknown, key: string): unknown {
-  return value && typeof value === "object" && key in value ? (value as Record<string, unknown>)[key] : undefined;
+  return value && typeof value === "object" && key in value
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
 }
 
 function stringAt(value: unknown, key: string, fallback: string): string {
@@ -282,7 +359,15 @@ function stringAt(value: unknown, key: string, fallback: string): string {
 }
 
 function teamLabel(team: Record<string, unknown>, fallback: string): string {
-  return stringAt(team, "abbreviation", stringAt(team, "teamCode", stringAt(team, "clubName", stringAt(team, "name", fallback))));
+  return stringAt(
+    team,
+    "abbreviation",
+    stringAt(
+      team,
+      "teamCode",
+      stringAt(team, "clubName", stringAt(team, "name", fallback)),
+    ),
+  );
 }
 
 function numberAt(value: unknown, key: string, fallback: number): number {

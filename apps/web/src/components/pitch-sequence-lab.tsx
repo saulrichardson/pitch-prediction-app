@@ -1,295 +1,557 @@
 "use client";
-
 import {
-  Activity,
-  Loader2,
-  Play,
-  Undo2
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  LoaderCircle,
+  RotateCcw,
+  CircleAlert,
+  Check,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import type {
-  ClientTimeline,
-  ClientTimelineStartJob,
-  GameSummary,
-  PitchEvaluation,
-  PitchEvent
+import { useEffect } from "react";
+import {
+  resultLabel,
+  type BaseState,
+  type EditionSummary,
+  type ReplayView,
 } from "@pitch/domain";
-import { strikeZoneForPitchDisplay } from "@pitch/domain";
-import { getJson, postJson } from "./pitch-sequence-lab/api";
-import { cap, formatGameDate, scoreLine } from "./pitch-sequence-lab/formatters";
-import { IntroScreen } from "./pitch-sequence-lab/intro-screen";
-import { MatchupBanner } from "./pitch-sequence-lab/matchup-banner";
-import { classifyTimelineJobPollError } from "./pitch-sequence-lab/polling";
-import { PredictionPanel } from "./pitch-sequence-lab/prediction-panel";
-import { ReadPanel } from "./pitch-sequence-lab/read-panel";
-import { MiniBases, StatePill, lastCompletedReveal } from "./pitch-sequence-lab/state-summary";
-
-type LoadState =
-  | { status: "idle" }
-  | { status: "loading"; message: string }
-  | {
-      status: "ready";
-      timeline: ClientTimeline;
-      game: GameSummary | null;
-      evaluation?: PitchEvaluation;
-      actualPitch?: PitchEvent;
-      lastReveal?: { pitch: PitchEvent; evaluation: PitchEvaluation };
-      notice?: { tone: "busy" | "error"; message: string };
-    }
-  | { status: "waiting"; job: ClientTimelineStartJob; game: GameSummary | null; message: string }
-  | { status: "error"; message: string };
+import { useReplay } from "./replay/use-replay";
+import { PitchPlot } from "./replay/pitch-plot";
+import { gameDate, percent, pitchName, ranked } from "./replay/format";
 
 export default function PitchPredictionApp() {
-  const [state, setState] = useState<LoadState>({ status: "idle" });
-  const [isHydrated, setIsHydrated] = useState(false);
-  const waitingJobId = state.status === "waiting" ? state.job.id : null;
-  const waitingGame = state.status === "waiting" ? state.game : null;
-
+  const app = useReplay();
+  const replay = app.screen.kind === "ready" ? app.screen.replay : null;
   useEffect(() => {
-    const hydrationReady = window.setTimeout(() => setIsHydrated(true), 0);
-    return () => window.clearTimeout(hydrationReady);
-  }, []);
-
-  useEffect(() => {
-    if (!waitingJobId) return undefined;
-
-    let cancelled = false;
-    let timer: number | undefined;
-    let consecutiveServerFailures = 0;
-
-    const poll = async () => {
-      try {
-        const result = await getJson<{ job: ClientTimelineStartJob; timeline?: ClientTimeline }>(`/api/timeline-jobs/${waitingJobId}`);
-        if (cancelled) return;
-        consecutiveServerFailures = 0;
-
-        if (result.job.status === "succeeded" && result.timeline) {
-          setState({ status: "ready", timeline: result.timeline, game: waitingGame });
-          return;
-        }
-
-        if (result.job.status === "failed") {
-          setState({ status: "error", message: timelineJobErrorMessage(result.job) });
-          return;
-        }
-
-        setState((current) => current.status === "waiting" && current.job.id === result.job.id
-          ? { ...current, job: result.job, message: timelineJobMessage(result.job) }
-          : current);
-        timer = window.setTimeout(poll, 2000);
-      } catch (error) {
-        if (cancelled) return;
-        const decision = classifyTimelineJobPollError(error, consecutiveServerFailures);
-        consecutiveServerFailures = decision.consecutiveServerFailures;
-        if (decision.terminal) {
-          setState({ status: "error", message: decision.message });
-          return;
-        }
-        setState((current) => current.status === "waiting"
-          ? { ...current, message: decision.message }
-          : current);
-        timer = window.setTimeout(poll, decision.retryDelayMs);
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        !replay ||
+        app.busy ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        (event.target instanceof Element &&
+          event.target.closest(
+            "a,input,select,summary,textarea,[contenteditable=true]",
+          ))
+      )
+        return;
+      if (event.key === "ArrowLeft" && replay.step > 0 && !app.needsRetry) {
+        event.preventDefault();
+        void app.send("back");
+      }
+      if (event.key === "ArrowRight" && replay.phase !== "complete") {
+        event.preventDefault();
+        void app.send(replay.phase === "forecast" ? "reveal" : "next");
       }
     };
-
-    timer = window.setTimeout(poll, 1200);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [waitingJobId, waitingGame]);
-
-  async function loadMetsGame() {
-    await run("Loading latest game and pitch feed", async () => {
-      const latest = await getJson<{ game: GameSummary }>("/api/games/mets/latest");
-      await getJson(`/api/games/${latest.game.gamePk}/replay`);
-      const created = await postJson<{ job: ClientTimelineStartJob; timeline?: ClientTimeline }>("/api/timeline-jobs", { gamePk: latest.game.gamePk });
-      if (created.timeline) return { status: "ready", timeline: created.timeline, game: latest.game };
-      return { status: "waiting", job: created.job, game: latest.game, message: timelineJobMessage(created.job) };
-    });
-  }
-
-  async function revealActual() {
-    if (state.status !== "ready") return;
-    await run("Revealing actual pitch", async () => {
-      const result = await postJson<{ timeline: ClientTimeline; pitch: PitchEvent; evaluation: PitchEvaluation }>(
-        `/api/timelines/${state.timeline.id}/reveal`,
-        {}
-      );
-      return {
-        ...state,
-        status: "ready",
-        timeline: result.timeline,
-        actualPitch: result.pitch,
-        evaluation: result.evaluation,
-        lastReveal: { pitch: result.pitch, evaluation: result.evaluation }
-      };
-    });
-  }
-
-  async function nextPitch() {
-    if (state.status !== "ready") return;
-    await run("Advancing along actual timeline", async () => {
-      const result = await postJson<{ timeline: ClientTimeline }>(`/api/timelines/${state.timeline.id}/advance`, {});
-      return { ...state, status: "ready", timeline: result.timeline, actualPitch: undefined, evaluation: undefined };
-    });
-  }
-
-  async function stepBack() {
-    if (state.status !== "ready") return;
-    await run("Taking one replay step back", async () => {
-      const result = await postJson<{ timeline: ClientTimeline; pitch?: PitchEvent; evaluation?: PitchEvaluation }>(
-        `/api/timelines/${state.timeline.id}/back`,
-        {}
-      );
-      const lastReveal = result.pitch && result.evaluation
-        ? { pitch: result.pitch, evaluation: result.evaluation }
-        : lastCompletedReveal(result.timeline);
-
-      return {
-        ...state,
-        status: "ready",
-        timeline: result.timeline,
-        actualPitch: result.pitch,
-        evaluation: result.evaluation,
-        lastReveal
-      };
-    });
-  }
-
-  async function stepGame() {
-    if (state.status !== "ready") return;
-    if (state.timeline.actualRevealed) {
-      await nextPitch();
-    } else {
-      await revealActual();
-    }
-  }
-
-  async function run(message: string, fn: () => Promise<LoadState>) {
-    const previous = state;
-    if (previous.status === "ready") {
-      setState({ ...previous, notice: { tone: "busy", message } });
-    } else {
-      setState({ status: "loading", message });
-    }
-    try {
-      const next = await fn();
-      setState(next.status === "ready" ? { ...next, notice: undefined } : next);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unexpected error";
-      setState(previous.status === "ready" ? { ...previous, notice: { tone: "error", message: errorMessage } } : { status: "error", message: errorMessage });
-    }
-  }
-
-  if (state.status !== "ready") {
-    return (
-      <main className="app-shell intro-page min-h-screen p-4 text-[var(--text)]">
-        <IntroScreen
-          error={state.status === "error" ? state.message : undefined}
-          isHydrated={isHydrated}
-          isLoading={state.status === "loading" || state.status === "waiting"}
-          loadingMessage={state.status === "loading" || state.status === "waiting" ? state.message : undefined}
-          preparationJob={state.status === "waiting" ? state.job : undefined}
-          onEnter={loadMetsGame}
-        />
-      </main>
-    );
-  }
-
-  const timeline = state.timeline;
-  const currentPitch = timeline.currentPitch;
-  const nextActualPitch = timeline.nextPitchContext;
-  const activePrediction = timeline.actualPrediction;
-  const revealedPitch = state.actualPitch;
-  const previousReveal = !revealedPitch ? state.lastReveal : undefined;
-  const activeState = currentPitch?.preState ?? null;
-  const history = timeline.actualHistory;
-  const displayStrikeZone = currentPitch ? strikeZoneForPitchDisplay(currentPitch, history, revealedPitch) : null;
-  const readEvaluation = state.evaluation ?? previousReveal?.evaluation;
-  const isLastPitch = timeline.currentPitchIndex >= timeline.actualPitchCount - 1;
-  const isBusy = state.notice?.tone === "busy";
-  const finalPitchCommitted = isLastPitch &&
-    timeline.actualRevealed &&
-    Boolean(currentPitch && timeline.actualHistory.at(-1)?.id === currentPitch.id && timeline.actualForecastHistory.at(-1)?.pitchIndex === timeline.currentPitchIndex);
-  const canStepGame = !isBusy && (!timeline.actualRevealed || !finalPitchCommitted);
-  const canStepBack = !isBusy && (timeline.actualRevealed || timeline.currentPitchIndex > 0);
-  const stepLabel = timeline.actualRevealed
-    ? isLastPitch ? finalPitchCommitted ? "Game Complete" : "Finish Game" : "Next Pitch"
-    : "Reveal Actual";
-  const stepTitle = timeline.actualRevealed
-    ? isLastPitch ? finalPitchCommitted ? "The replay has reached the final pitch." : "Commit the final pitch result to the replay history." : "Advance actual history and compute the next prediction."
-    : "Reveal the actual pitch and compare it with the pre-pitch read.";
-  const backTitle = timeline.actualRevealed
-    ? "Return to the pre-pitch forecast."
-    : "Return to the previous pitch result.";
-  const StepIcon = timeline.actualRevealed ? Play : Activity;
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [replay, app]);
 
   return (
-    <main className="app-shell min-h-screen p-4 text-[var(--text)]">
-      <header className="panel top-board mb-4">
-        <div className="top-board-title">
-          <p className="small-label">Pitch Prediction App</p>
-          <h1 className="display text-4xl font-bold text-[var(--text-strong)]">{timeline.game.label}</h1>
-          <p className="game-date" data-testid="game-date">
-            Game date {formatGameDate(timeline.game.officialDate)} · {timeline.game.status}
-          </p>
+    <main className="app-shell">
+      <nav className="masthead" aria-label="App">
+        <div className="wordmark">
+          <span className="brand-mark" aria-hidden="true">
+            P
+          </span>
+          Pitch<span className="wordmark-sub">/ Replay</span>
         </div>
-        {currentPitch ? <MatchupBanner pitch={currentPitch} /> : null}
-        <div className="state-strip">
-          <StatePill testId="state-inning" label="Inning" value={activeState ? `${cap(activeState.half)} ${activeState.inning}` : "Not loaded"} />
-          <StatePill testId="state-count" label="Count" value={activeState ? `${activeState.count.balls}-${activeState.count.strikes}` : "--"} emphasis />
-          <StatePill testId="state-outs" label="Outs" value={activeState ? "●".repeat(activeState.outs).padEnd(3, "○") : "○○○"} />
-          <StatePill testId="state-score" label="Score" value={activeState ? scoreLine(timeline.game, activeState) : "--"} />
-          <div className="state-pill state-pill-bases" data-testid="state-bases">
-            <span>Bases</span>
-            {activeState ? <MiniBases bases={activeState.bases} /> : <MiniBases bases={{ first: false, second: false, third: false }} />}
-          </div>
-          <StatePill testId="state-pitch" label="Pitch" value={`P${timeline.currentPitchIndex + 1}`} />
-        </div>
-        <div className="top-actions">
-          <button className="btn btn-primary" onClick={stepGame} disabled={!canStepGame} title={stepTitle}><StepIcon size={16} />{stepLabel}</button>
-          <button className="btn" onClick={stepBack} disabled={!canStepBack} title={backTitle}><Undo2 size={16} />Back</button>
-        </div>
-      </header>
-
-      {state.notice ? (
-        <section className={`panel mb-4 flex items-center gap-2 p-3 text-sm font-bold ${state.notice.tone === "error" ? "notice-error" : "notice-busy"}`} aria-live="polite">
-          {state.notice.tone === "busy" ? <Loader2 className="animate-spin" size={16} /> : null}
-          {state.notice.message}
+        <About />
+      </nav>
+      {app.screen.kind === "loading" ? (
+        <section className="loading-screen" role="status">
+          <LoaderCircle className="spinner" size={24} />
+          <p>Opening your replay</p>
         </section>
       ) : null}
-
-      {currentPitch && activePrediction && activeState ? (
+      {app.screen.kind === "unavailable" ? (
+        <section className="empty-screen">
+          <CircleAlert size={28} />
+          <h1>Replay unavailable.</h1>
+          <p>{app.screen.message}</p>
+          <button
+            className="button primary"
+            onClick={app.restore}
+            disabled={app.busy}
+          >
+            {app.busy ? "Opening replay" : "Try again"} <ArrowRight size={16} />
+          </button>
+        </section>
+      ) : null}
+      {app.screen.kind === "intro" ? (
+        <Intro
+          edition={app.screen.edition}
+          busy={app.busy}
+          onStart={app.start}
+          notice={app.notice}
+        />
+      ) : null}
+      {replay ? (
         <>
-          <section className="cockpit-main-grid gap-4" aria-busy={isBusy}>
-            <ReadPanel
-              prediction={activePrediction}
-              nextPitch={nextActualPitch}
-              actualPitch={revealedPitch}
-              previousReveal={previousReveal}
-              evaluation={readEvaluation}
-              game={timeline.game}
-              strikeZone={displayStrikeZone}
+          <Scoreboard replay={replay} />
+          <div className="replay-heading">
+            <div>
+              <p className="eyebrow">The matchup</p>
+              <h1>
+                <span>{replay.current.matchup.pitcherName}</span>
+                <span className="versus">to</span>
+                <span>{replay.current.matchup.batterName}</span>
+              </h1>
+            </div>
+            <span className="pitch-progress">
+              Pitch <strong>{replay.index + 1}</strong>
+              <span> / {replay.edition.pitchCount}</span>
+            </span>
+          </div>
+          <section
+            className="replay-stage"
+            aria-label="Pitch prediction and actual comparison"
+            aria-busy={app.busy}
+          >
+            <Forecast replay={replay} />
+            <PitchPlot
+              forecast={replay.prediction.location.expected}
+              actual={replay.actual?.location ?? null}
+              zone={replay.strikeZone}
             />
+            <Actual replay={replay} />
           </section>
-          <PredictionPanel prediction={activePrediction} />
+          <div className="action-dock">
+            <div
+              className="action-context"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {app.notice ? (
+                <span className="connection-notice">{app.notice}</span>
+              ) : replay.phase === "complete" ? (
+                <span>
+                  <Check size={15} /> At-bat complete
+                </span>
+              ) : (
+                <span className="sr-only">
+                  {replay.phase === "forecast"
+                    ? "Ready to reveal"
+                    : "Ready for the next pitch"}
+                </span>
+              )}
+            </div>
+            <div className="action-buttons">
+              <button
+                className="button secondary back-button"
+                onClick={() => app.send("back")}
+                disabled={app.busy || replay.step === 0 || app.needsRetry}
+                aria-label="Back one replay step"
+              >
+                <ArrowLeft size={17} />
+                <span>Back</span>
+              </button>
+              <button
+                className="button primary"
+                onClick={() =>
+                  app.send(
+                    replay.phase === "complete"
+                      ? "restart"
+                      : replay.phase === "forecast"
+                        ? "reveal"
+                        : "next",
+                  )
+                }
+                disabled={app.busy}
+              >
+                {app.busy ? (
+                  <LoaderCircle className="spinner" size={17} />
+                ) : null}
+                {app.needsRetry && !app.busy
+                  ? "Try again"
+                  : replay.phase === "complete"
+                    ? "Replay again"
+                    : replay.phase === "forecast"
+                      ? "Reveal pitch"
+                      : "Next pitch"}
+                {!app.busy ? (
+                  replay.phase === "complete" ? (
+                    <RotateCcw size={16} />
+                  ) : (
+                    <ArrowRight size={17} />
+                  )
+                ) : null}
+              </button>
+            </div>
+          </div>
+          {replay.summary ? (
+            <section className="replay-summary" aria-label="At-bat summary">
+              <div>
+                <p className="eyebrow">The final read</p>
+                <h2>{replay.summary.outcome}</h2>
+              </div>
+              <p>
+                <strong>
+                  {replay.summary.topPicks} of {replay.summary.pitches}
+                </strong>{" "}
+                top picks matched
+              </p>
+              <p>
+                <strong>
+                  {replay.summary.topTwo} of {replay.summary.pitches}
+                </strong>{" "}
+                in the top two
+              </p>
+            </section>
+          ) : null}
+          <Details replay={replay} />
+          <footer className="replay-footer">
+            <span>
+              MLB replay · {gameDate(replay.edition.game.officialDate)}
+            </span>
+            <span className="keyboard-hint">
+              ← Back <span>·</span> → Continue
+            </span>
+          </footer>
         </>
       ) : null}
     </main>
   );
 }
 
-function timelineJobMessage(job: ClientTimelineStartJob) {
-  if (job.status === "pending") return "Queueing replay start";
-  if (job.status === "running") return "Starting the real model";
-  if (job.status === "succeeded") return "Opening replay";
-  return "Model start failed";
+function About() {
+  return (
+    <details className="about">
+      <summary>
+        About <ChevronDown size={13} />
+      </summary>
+      <div>
+        <strong>Pitch Prediction</strong>
+        <p>
+          Real MLB at-bats, read pitch by pitch. Forecasts are generated with
+          the xLSTM model and saved as a complete replay.
+        </p>
+        <a
+          href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Model card ↗
+        </a>
+        <a
+          href="https://github.com/saulrichardson/pitch-prediction-app"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Source code ↗
+        </a>
+      </div>
+    </details>
+  );
 }
-
-function timelineJobErrorMessage(job: ClientTimelineStartJob) {
-  if (job.error?.code === "model_timeout") {
-    return "The real model is taking longer than expected to warm up. Try starting the replay again in a moment.";
-  }
-  return job.error?.message ?? "The replay could not be prepared. Try starting again.";
+function Intro({
+  edition,
+  busy,
+  onStart,
+  notice,
+}: {
+  edition: EditionSummary;
+  busy: boolean;
+  onStart: () => void;
+  notice: string | null;
+}) {
+  return (
+    <section className="intro">
+      <div className="intro-copy">
+        <p className="eyebrow">Baseball, one pitch ahead</p>
+        <h1>
+          Every pitch.
+          <br />
+          <span>A new read.</span>
+        </h1>
+        <p className="intro-description">
+          See what the model expects.
+          <br />
+          Reveal what actually happened.
+        </p>
+        <button
+          className="button primary intro-start"
+          onClick={onStart}
+          disabled={busy}
+        >
+          {busy ? <LoaderCircle className="spinner" size={17} /> : null}
+          {busy ? "Opening replay" : "Start replay"}
+          <ArrowRight size={17} />
+        </button>
+        {notice ? (
+          <p className="connection-notice" role="status">
+            {notice}
+          </p>
+        ) : null}
+      </div>
+      <div className="featured-card">
+        <div className="featured-meta">
+          <span className="eyebrow">Featured at-bat</span>
+          <span>{gameDate(edition.game.officialDate)}</span>
+        </div>
+        <div className="featured-teams">
+          {edition.game.label.replace(" @ ", " / ")}
+        </div>
+        <div className="field-art" aria-hidden="true">
+          <svg viewBox="0 0 300 200">
+            <path
+              d="M150 190 L20 60 Q150 -55 280 60 Z"
+              className="field-outfield"
+            />
+            <path
+              d="M150 175 L70 95 L150 15 L230 95 Z"
+              className="field-infield"
+            />
+            <path
+              d="M150 175 L102 127 L150 79 L198 127 Z"
+              className="field-basepath"
+            />
+            <circle cx="150" cy="127" r="5" />
+            <rect
+              x="146"
+              y="75"
+              width="8"
+              height="8"
+              transform="rotate(45 150 79)"
+            />
+            <rect
+              x="98"
+              y="123"
+              width="8"
+              height="8"
+              transform="rotate(45 102 127)"
+            />
+            <rect
+              x="194"
+              y="123"
+              width="8"
+              height="8"
+              transform="rotate(45 198 127)"
+            />
+            <path d="M145 172 H155 V178 L150 183 L145 178 Z" />
+          </svg>
+        </div>
+        <div className="featured-matchup">
+          <span>{edition.matchup.pitcherName}</span>
+          <small>pitching to</small>
+          <span>{edition.matchup.batterName}</span>
+        </div>
+        <div className="featured-bottom">
+          <span>
+            {edition.half === "top" ? "Top" : "Bottom"} {edition.inning}
+          </span>
+          <span>{edition.pitchCount} pitches · Complete replay</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+function Bases({ bases }: { bases: BaseState }) {
+  return (
+    <svg
+      className="bases"
+      viewBox="0 0 44 36"
+      role="img"
+      aria-label={`Bases: ${[bases.first && "first", bases.second && "second", bases.third && "third"].filter(Boolean).join(", ") || "empty"}`}
+    >
+      <path
+        className={bases.second ? "occupied" : ""}
+        d="M22 1 L30 9 L22 17 L14 9 Z"
+      />
+      <path
+        className={bases.third ? "occupied" : ""}
+        d="M10 13 L18 21 L10 29 L2 21 Z"
+      />
+      <path
+        className={bases.first ? "occupied" : ""}
+        d="M34 13 L42 21 L34 29 L26 21 Z"
+      />
+    </svg>
+  );
+}
+function Scoreboard({ replay }: { replay: ReplayView }) {
+  const state = replay.current.preState;
+  const teams = replay.edition.game.label.split(" @ ");
+  return (
+    <header className="scoreboard">
+      <div className="score-teams">
+        <span>
+          {teams[0]} <b>{state.awayScore}</b>
+        </span>
+        <span className="score-separator">—</span>
+        <span>
+          {teams[1]} <b>{state.homeScore}</b>
+        </span>
+        <time>{gameDate(replay.edition.game.officialDate)}</time>
+      </div>
+      <div className="game-context">
+        <span>
+          {state.half === "top" ? "↑" : "↓"} {state.inning}
+          <span className="sr-only"> {state.half}</span>
+        </span>
+        <span className="count" data-testid="count">
+          {state.count.balls}–{state.count.strikes}
+        </span>
+        <span className="outs" aria-label={`${state.outs} outs`}>
+          {[0, 1, 2].map((i) => (
+            <i className={i < state.outs ? "filled" : ""} key={i} />
+          ))}
+        </span>
+        <Bases bases={state.bases} />
+      </div>
+    </header>
+  );
+}
+function Forecast({ replay }: { replay: ReplayView }) {
+  const mix = ranked(replay.prediction.pitchMix);
+  const top = mix[0];
+  const velocity = replay.prediction.velocity.find(
+    (v) => v.pitchType === top.label,
+  );
+  return (
+    <div className="forecast">
+      <p className="eyebrow">
+        <span className="status-dot" />
+        Model forecast
+      </p>
+      <h2>{pitchName(top.label)}</h2>
+      <div className="forecast-probability">
+        {percent(top.probability)}
+        <span>pitch probability</span>
+      </div>
+      <div className="forecast-location">
+        <strong>{replay.prediction.location.expected.label}</strong>
+        <span>
+          {velocity ? `${velocity.mean.toFixed(1)} mph` : "Location estimate"}
+        </span>
+      </div>
+      <div className="alternatives" aria-label="Other likely pitches">
+        {mix.slice(1, 3).map((item) => (
+          <div key={item.label}>
+            <span>{pitchName(item.label)}</span>
+            <span>{percent(item.probability)}</span>
+            <i style={{ width: `${item.probability * 100}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function Actual({ replay }: { replay: ReplayView }) {
+  const last = replay.history.at(-1);
+  return (
+    <div
+      className={`actual-card ${replay.actual ? "is-revealed" : ""}`}
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <div className="actual-title">
+        <p className="eyebrow">Actual pitch</p>
+        {replay.actual ? (
+          <span className="actual-status">Revealed</span>
+        ) : (
+          <span className="actual-status pending-status">Hidden</span>
+        )}
+      </div>
+      {replay.actual ? (
+        <>
+          <div className="actual-main">
+            <h2>{pitchName(replay.actual.pitchType)}</h2>
+            <strong>
+              {replay.actual.shape.velocity?.toFixed(1) ?? "—"}
+              <small> mph</small>
+            </strong>
+          </div>
+          <div className="actual-result">
+            <span>{resultLabel(replay.actual.result)}</span>
+            <span>{replay.actual.location.label}</span>
+          </div>
+          <div className="actual-evaluation">
+            <span>
+              {replay.evaluation?.pitchTypeRank === 1
+                ? "Top pick matched"
+                : `Forecast rank ${replay.evaluation?.pitchTypeRank ? `#${replay.evaluation.pitchTypeRank}` : "—"}`}
+            </span>
+            <span>
+              {percent(replay.evaluation?.pitchTypeProbability ?? 0)}{" "}
+              probability
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="actual-hidden">
+          <span className="hidden-mark" aria-hidden="true">
+            •••
+          </span>
+          {last ? (
+            <p>
+              Last pitch: <strong>{pitchName(last.actual.pitchType)}</strong> ·{" "}
+              {resultLabel(last.actual.result)}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+function Details({ replay }: { replay: ReplayView }) {
+  return (
+    <details className="forecast-details">
+      <summary>
+        Explore the forecast <ChevronDown size={17} />
+      </summary>
+      <div className="details-content">
+        <div className="distribution-grid">
+          {[
+            { title: "Pitch probabilities", items: replay.prediction.pitchMix },
+            {
+              title: "Sampled locations",
+              items: replay.prediction.location.density,
+            },
+            { title: "Sampled results", items: replay.prediction.resultMix },
+            { title: "Next count", items: replay.prediction.countImpact },
+          ].map((group) => (
+            <section key={group.title}>
+              <h3>{group.title}</h3>
+              {ranked(group.items)
+                .filter((item) => item.probability > 0)
+                .map((item) => (
+                  <div className="distribution" key={item.label}>
+                    <span>
+                      {group.title === "Pitch probabilities"
+                        ? pitchName(item.label)
+                        : item.label}
+                    </span>
+                    <meter
+                      value={item.probability}
+                      min="0"
+                      max="1"
+                      aria-label={
+                        group.title === "Pitch probabilities"
+                          ? pitchName(item.label)
+                          : item.label
+                      }
+                      aria-valuetext={percent(item.probability)}
+                    />
+                    <strong>{percent(item.probability)}</strong>
+                  </div>
+                ))}
+            </section>
+          ))}
+        </div>
+        <p className="methodology">
+          Pitch probabilities come from{" "}
+          {replay.prediction.pitchMixSource === "model"
+            ? "the model distribution"
+            : "the model samples"}
+          . Location, result, and next-count estimates use{" "}
+          {replay.prediction.sampleSize} model samples. Velocity averages the
+          matching pitch type. The zone uses information available before this
+          pitch. Model: {replay.prediction.modelVersion}.
+        </p>
+      </div>
+    </details>
+  );
 }

@@ -15,16 +15,21 @@ export class PitchSequenceModelStack extends cdk.Stack {
     const modelArchitecture = architectureFromEnv(process.env.MODEL_LAMBDA_ARCHITECTURE ?? "x86_64");
     const modelMemoryMb = numberFromEnv("MODEL_LAMBDA_MEMORY_MB", 1024);
     const modelTimeoutSeconds = numberFromEnv("MODEL_LAMBDA_TIMEOUT_SECONDS", 300);
-    const modelReservedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_RESERVED_CONCURRENCY") ?? 2;
+    const modelReservedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_RESERVED_CONCURRENCY") ?? 1;
     const modelProvisionedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_PROVISIONED_CONCURRENCY") ?? 0;
+    const modelSnapStart = booleanFromEnv("MODEL_LAMBDA_SNAPSTART", true);
     const modelSampleSize = process.env.PITCHPREDICT_SAMPLE_SIZE ?? "8";
     const modelAlgorithm = process.env.PITCHPREDICT_ALGORITHM ?? "xlstm";
+
+    if (modelSnapStart && modelProvisionedConcurrency > 0) {
+      throw new Error("MODEL_LAMBDA_SNAPSTART and MODEL_LAMBDA_PROVISIONED_CONCURRENCY cannot both be enabled.");
+    }
 
     const repository = ecr.Repository.fromRepositoryName(this, "ModelRepository", repositoryName);
 
     const modelLogGroup = new logs.LogGroup(this, "ModelFunctionLogGroup", {
       logGroupName: `/aws/lambda/${modelFunctionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
+      retention: logs.RetentionDays.ONE_DAY,
       removalPolicy: cdk.RemovalPolicy.RETAIN
     });
 
@@ -35,7 +40,7 @@ export class PitchSequenceModelStack extends cdk.Stack {
       memorySize: modelMemoryMb,
       timeout: cdk.Duration.seconds(modelTimeoutSeconds),
       reservedConcurrentExecutions: modelReservedConcurrency,
-      ephemeralStorageSize: cdk.Size.mebibytes(1024),
+      ephemeralStorageSize: cdk.Size.mebibytes(512),
       logGroup: modelLogGroup,
       environment: {
         ENVIRONMENT: "lambda",
@@ -43,6 +48,7 @@ export class PitchSequenceModelStack extends cdk.Stack {
         PITCHPREDICT_ALGORITHM: modelAlgorithm,
         PITCHPREDICT_SAMPLE_SIZE: modelSampleSize,
         PITCHPREDICT_WARM_ON_STARTUP: "true",
+        PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT: modelSnapStart ? "true" : "false",
         HOME: "/tmp",
         XDG_CACHE_HOME: "/tmp/.cache",
         HF_HOME: "/tmp/huggingface",
@@ -51,10 +57,18 @@ export class PitchSequenceModelStack extends cdk.Stack {
         TORCH_HOME: "/tmp/torch",
         PYBASEBALL_CACHE: "/tmp/pybaseball-cache",
         PITCHPREDICT_MODEL_DIR: "/tmp/pitchpredict-model",
+        PITCHPREDICT_XLSTM_PATH: "/opt/pitchpredict-xlstm",
         PITCHPREDICT_CACHE_DIR: "/tmp/pitchpredict-cache",
         PITCHPREDICT_LOG_DIR: "/tmp/pitchpredict-logs"
       }
     });
+
+    if (modelSnapStart) {
+      // Container-image SnapStart launched after this CDK release, so its L2
+      // runtime metadata still rejects FROM_IMAGE. CloudFormation supports it.
+      const cfnModelFunction = modelFunction.node.defaultChild as lambda.CfnFunction;
+      cfnModelFunction.snapStart = { applyOn: "PublishedVersions" };
+    }
 
     const liveAlias = new lambda.Alias(this, "ModelLiveAlias", {
       aliasName: modelAliasName,
@@ -94,6 +108,15 @@ function optionalNumberFromEnv(name: string): number | undefined {
     throw new Error(`${name} must be a number.`);
   }
   return value;
+}
+
+function booleanFromEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  throw new Error(`${name} must be true or false.`);
 }
 
 function architectureFromEnv(raw: string): lambda.Architecture {

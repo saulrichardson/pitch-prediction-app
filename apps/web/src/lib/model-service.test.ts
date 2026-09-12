@@ -3,18 +3,18 @@ import type { PredictionRequest } from "@pitch/domain";
 import { modelHealth, modelReadiness, predictPitch } from "./model-service";
 
 const { lambdaSendMock } = vi.hoisted(() => ({
-  lambdaSendMock: vi.fn()
+  lambdaSendMock: vi.fn(),
 }));
 
 vi.mock("@aws-sdk/client-lambda", () => ({
   LambdaClient: vi.fn(function LambdaClient() {
     return {
-    send: lambdaSendMock
+      send: lambdaSendMock,
     };
   }),
   InvokeCommand: vi.fn(function InvokeCommand(input: unknown) {
     return { input };
-  })
+  }),
 }));
 
 const originalEnv = { ...process.env };
@@ -27,7 +27,7 @@ beforeEach(() => {
     MODEL_BACKEND: "http",
     MODEL_BASE_URL: "http://model.local",
     MODEL_API_KEY: "secret",
-    MODEL_LAMBDA_FUNCTION_NAME: ""
+    MODEL_LAMBDA_FUNCTION_NAME: "",
   };
 });
 
@@ -38,31 +38,57 @@ afterEach(() => {
 
 describe("model service adapter", () => {
   it("turns model auth failures into explicit service-unavailable errors", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "Invalid model service credentials." }), { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: "Invalid model service credentials." }),
+            { status: 401 },
+          ),
+      ),
+    );
 
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
       code: "model_auth_failed",
-      message: "Real model prediction failed because model service authentication is not configured correctly."
+      message:
+        "Real model prediction failed because model service authentication is not configured correctly.",
     });
   });
 
   it("turns model unavailable responses into explicit service-unavailable errors", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "Model loading." }), { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "Model loading." }), {
+            status: 503,
+          }),
+      ),
+    );
 
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
       code: "model_unavailable",
-      message: "Real model prediction is unavailable: Model loading."
+      message: "Real model prediction is unavailable: Model loading.",
     });
   });
 
   it("rejects malformed model responses with a stable error code", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "missing-fields" }), { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: "missing-fields" }), {
+            status: 200,
+          }),
+      ),
+    );
 
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
-      code: "model_malformed_response"
+      code: "model_malformed_response",
     });
   });
 
@@ -70,77 +96,122 @@ describe("model service adapter", () => {
     process.env.MODEL_REQUEST_TIMEOUT_MS = "1000";
     const aborted = new Error("aborted");
     aborted.name = "AbortError";
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw aborted;
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw aborted;
+      }),
+    );
 
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
       code: "model_timeout",
-      message: "Real model prediction timed out after 1 seconds."
+      message: "Real model prediction timed out after 1 seconds.",
     });
   });
 
   it("checks authenticated readiness through the same bearer-token boundary", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(modelHealth()).resolves.toBe("ok");
-    expect(fetchMock).toHaveBeenCalledWith("http://model.local/ready", expect.objectContaining({
-      headers: { authorization: "Bearer secret" }
-    }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://model.local/ready",
+      expect.objectContaining({
+        headers: { authorization: "Bearer secret" },
+      }),
+    );
   });
 
   it("reports readiness unavailable when the authenticated check fails", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "Invalid model service credentials." }), { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: "Invalid model service credentials." }),
+            { status: 401 },
+          ),
+      ),
+    );
 
     await expect(modelHealth()).resolves.toBe("unavailable");
   });
 
   it("can call the serverless model Lambda backend", async () => {
-    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    process.env = {
+      ...originalEnv,
+      MODEL_BACKEND: "lambda",
+      MODEL_LAMBDA_FUNCTION_NAME: "pitch-model",
+    };
     lambdaSendMock.mockResolvedValue({
-      Payload: Buffer.from(JSON.stringify({ ok: true, prediction: predictionResponse() }))
+      Payload: Buffer.from(
+        JSON.stringify({ ok: true, prediction: predictionResponse() }),
+      ),
     });
 
     await expect(predictPitch(predictionRequest())).resolves.toMatchObject({
       modelVersion: "pitchpredict-xlstm-v0.5.0",
-      pitchMix: [{ label: "FF", probability: 0.5 }]
+      pitchMixSource: "model",
+      pitchMix: [{ label: "FF", probability: 1 }],
     });
 
     expect(lambdaSendMock).toHaveBeenCalledTimes(1);
   });
 
   it("checks serverless model Lambda readiness", async () => {
-    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    process.env = {
+      ...originalEnv,
+      MODEL_BACKEND: "lambda",
+      MODEL_LAMBDA_FUNCTION_NAME: "pitch-model",
+    };
     lambdaSendMock.mockResolvedValue({
-      Payload: Buffer.from(JSON.stringify({ ok: true, health: { status: "ok" } }))
+      Payload: Buffer.from(
+        JSON.stringify({ ok: true, health: { status: "ok" } }),
+      ),
     });
 
     await expect(modelHealth()).resolves.toBe("ok");
   });
 
   it("reports Lambda model readiness from configuration without cold-starting the model", async () => {
-    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    process.env = {
+      ...originalEnv,
+      MODEL_BACKEND: "lambda",
+      MODEL_LAMBDA_FUNCTION_NAME: "pitch-model",
+    };
 
     await expect(modelReadiness()).resolves.toBe("configured");
     expect(lambdaSendMock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed serverless model Lambda responses", async () => {
-    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    process.env = {
+      ...originalEnv,
+      MODEL_BACKEND: "lambda",
+      MODEL_LAMBDA_FUNCTION_NAME: "pitch-model",
+    };
     lambdaSendMock.mockResolvedValue({
-      Payload: Buffer.from(JSON.stringify({ ok: true, prediction: { id: "missing-fields" } }))
+      Payload: Buffer.from(
+        JSON.stringify({ ok: true, prediction: { id: "missing-fields" } }),
+      ),
     });
 
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
-      code: "model_malformed_response"
+      code: "model_malformed_response",
     });
   });
 
   it("turns serverless model Lambda throttling into a retryable busy error", async () => {
-    process.env = { ...originalEnv, MODEL_BACKEND: "lambda", MODEL_LAMBDA_FUNCTION_NAME: "pitch-model" };
+    process.env = {
+      ...originalEnv,
+      MODEL_BACKEND: "lambda",
+      MODEL_LAMBDA_FUNCTION_NAME: "pitch-model",
+    };
     const throttle = new Error("Rate exceeded");
     throttle.name = "TooManyRequestsException";
     Object.assign(throttle, { $metadata: { httpStatusCode: 429 } });
@@ -149,7 +220,8 @@ describe("model service adapter", () => {
     await expect(predictPitch(predictionRequest())).rejects.toMatchObject({
       status: 503,
       code: "model_busy",
-      message: "The real model is handling another prediction. Try again in a moment."
+      message:
+        "The real model is handling another prediction. Try again in a moment.",
     });
   });
 });
@@ -162,7 +234,7 @@ function predictionRequest(): PredictionRequest {
     outs: 0 as const,
     bases: { first: false, second: false, third: false },
     awayScore: 0,
-    homeScore: 0
+    homeScore: 0,
   };
   return {
     pitcherId: "10",
@@ -180,7 +252,7 @@ function predictionRequest(): PredictionRequest {
     timesThroughOrder: 1,
     strikeZone: { top: 3.5, bottom: 1.5 },
     pitcherSessionHistory: [],
-    currentPaHistory: []
+    currentPaHistory: [],
   };
 }
 
@@ -188,22 +260,25 @@ function predictionResponse() {
   return {
     id: "pred-1",
     modelVersion: "pitchpredict-xlstm-v0.5.0",
-    pitchMix: [{ label: "FF", probability: 0.5 }],
-    resultMix: [{ label: "Strike/Foul", probability: 0.5 }],
+    pitchMixSource: "model",
+    pitchMix: [{ label: "FF", probability: 1 }],
+    resultMix: [{ label: "Strike/Foul", probability: 1 }],
     location: {
-      density: [{ label: "Middle", probability: 0.5 }],
-      expected: { px: 0, pz: 2.5, zone: 5, label: "Middle" }
+      density: [{ label: "Middle", probability: 1 }],
+      expected: { px: 0, pz: 2.5, zone: 5, label: "Middle" },
     },
-    countImpact: [{ label: "0-1", probability: 0.5 }],
-    paForecast: [{ label: "Ball in play", probability: 0.5 }],
-    expectedPitchesRemaining: 3.2,
-    possiblePitches: [{
-      pitchType: "FF",
-      velocity: 94,
-      location: { px: 0, pz: 2.5, zone: 5, label: "Middle" },
-      result: "called_strike",
-      description: "FF 94 middle, called strike"
-    }],
-    createdAt: "2026-05-10T00:00:00.000Z"
+    countImpact: [{ label: "0-1", probability: 1 }],
+    sampleSize: 8,
+    velocity: [{ pitchType: "FF", mean: 94, sampleCount: 8 }],
+    possiblePitches: [
+      {
+        pitchType: "FF",
+        velocity: 94,
+        location: { px: 0, pz: 2.5, zone: 5, label: "Middle" },
+        result: "called_strike",
+        description: "FF 94 middle, called strike",
+      },
+    ],
+    createdAt: "2026-05-10T00:00:00.000Z",
   };
 }

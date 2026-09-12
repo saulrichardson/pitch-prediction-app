@@ -3,6 +3,7 @@ node_modules
 cdk.out
 coverage
 playwright-report
+.playwright-mcp
 test-results
 .git
 .env

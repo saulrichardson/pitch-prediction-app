@@ -59,6 +59,11 @@ class PitchPredictRuntime:
         )
 
     def _build_client(self) -> Any:
+        if self.settings.algorithm == "xlstm":
+            from .xlstm_client import build_xlstm_client
+
+            return build_xlstm_client()
+
         from pitchpredict.api import PitchPredict, get_algorithm_by_name
 
         return PitchPredict(

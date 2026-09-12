@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import random
 from typing import Any
 
 from fastapi import HTTPException
@@ -13,6 +14,13 @@ from .runtime import PitchPredictRuntime
 
 _runtime: PitchPredictRuntime | None = None
 _runtime_init_error: str | None = None
+
+
+def should_initialize_for_snapshot() -> bool:
+    """Return whether this import is the SnapStart snapshot initialization."""
+    enabled = os.environ.get("PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT", "false").strip().lower()
+    initialization_type = os.environ.get("AWS_LAMBDA_INITIALIZATION_TYPE", "").strip().lower()
+    return enabled in {"1", "true", "yes", "on"} and initialization_type == "snap-start"
 
 
 def configure_writable_runtime_dirs() -> None:
@@ -41,17 +49,6 @@ async def _initialize_runtime() -> PitchPredictRuntime:
     runtime = PitchPredictRuntime(settings_from_env())
     await runtime.start()
     return runtime
-
-
-def warm_on_startup_enabled() -> bool:
-    return os.getenv("PITCHPREDICT_WARM_ON_STARTUP", "").lower() in {"1", "true", "yes", "on"}
-
-
-if warm_on_startup_enabled():
-    try:
-        _runtime = asyncio.run(_initialize_runtime())
-    except Exception as exc:
-        _runtime_init_error = str(exc)
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
@@ -115,3 +112,33 @@ async def _get_runtime() -> PitchPredictRuntime:
             _runtime_init_error = str(exc)
             raise HTTPException(status_code=503, detail=f"Model service failed to initialize: {_runtime_init_error}") from exc
     return _runtime
+
+
+def _reseed_after_snapshot_restore() -> None:
+    """Give every restored model environment independent sampling state."""
+    seed = int.from_bytes(os.urandom(8), "big") & ((1 << 63) - 1)
+    random.seed(seed)
+
+    import numpy as np
+    import torch
+
+    np.random.seed(seed % (2**32))
+    torch.manual_seed(seed)
+
+
+def _initialize_runtime_for_snapshot() -> None:
+    global _runtime, _runtime_init_error
+
+    from snapshot_restore_py import register_after_restore
+
+    register_after_restore(_reseed_after_snapshot_restore)
+    try:
+        _runtime = asyncio.run(_initialize_runtime())
+        _runtime_init_error = None
+    except Exception as exc:
+        _runtime_init_error = str(exc)
+        raise RuntimeError(f"Model service failed to initialize for SnapStart: {_runtime_init_error}") from exc
+
+
+if should_initialize_for_snapshot():
+    _initialize_runtime_for_snapshot()

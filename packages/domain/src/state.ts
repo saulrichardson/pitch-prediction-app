@@ -12,26 +12,30 @@ import type {
   RevealLabel,
   StrikeZoneBounds,
   StrikeZoneSource,
-  TerminalState
+  TerminalState,
 } from "./types";
 
-export const emptyBases: BaseState = { first: false, second: false, third: false };
+export const emptyBases: BaseState = {
+  first: false,
+  second: false,
+  third: false,
+};
 export const DEFAULT_STRIKE_ZONE: StrikeZoneBounds = {
   top: 3.5,
   bottom: 1.5,
   width: 17,
   depth: null,
-  source: "default"
+  source: "default",
 };
 
 export function applyPitchResult(
   preState: GameState,
-  result: PitchResult
+  result: PitchResult,
 ): { postState: GameState; terminalState: TerminalState | null } {
   const next: GameState = {
     ...preState,
     count: { ...preState.count },
-    bases: { ...preState.bases }
+    bases: { ...preState.bases },
   };
 
   if (result === "ball_in_play") {
@@ -56,7 +60,13 @@ export function applyPitchResult(
     return { postState: next, terminalState: null };
   }
 
-  if (result === "called_strike" || result === "whiff" || result === "foul") {
+  if (
+    result === "called_strike" ||
+    result === "whiff" ||
+    result === "foul" ||
+    result === "foul_tip" ||
+    result === "foul_bunt"
+  ) {
     if (preState.count.strikes === 2) {
       next.outs = clampOuts(preState.outs + 1);
       return { postState: next, terminalState: "strikeout" };
@@ -70,25 +80,29 @@ export function applyPitchResult(
 
 export function evaluatePitch(
   prediction: PredictionResponse,
-  actual: PitchEvent
+  actual: PitchEvent,
 ): PitchEvaluation {
   const pitchMix = sortedProbabilities(prediction.pitchMix);
   const pitchRank = pitchMix.findIndex((p) => p.label === actual.pitchType);
   const pitchTypeProbability = probabilityFor(pitchMix, actual.pitchType);
-  const resultProbability = probabilityFor(prediction.resultMix, resultSummary(actual.result));
+  const resultProbability = probabilityFor(
+    prediction.resultMix,
+    resultSummary(actual.result),
+  );
   const top = pitchMix[0] ?? null;
   const locationErrorFeet = distance(
     prediction.location.expected.px,
     prediction.location.expected.pz,
     actual.location.px,
-    actual.location.pz
+    actual.location.pz,
   );
-  const velocityRead = prediction.possiblePitches.find((pitch) => pitch.pitchType === actual.pitchType)?.velocity
-    ?? prediction.possiblePitches[0]?.velocity
-    ?? null;
-  const velocityErrorMph = velocityRead !== null
-    ? Math.abs(velocityRead - (actual.shape.velocity ?? velocityRead))
-    : null;
+  const velocityRead =
+    prediction.velocity.find((pitch) => pitch.pitchType === actual.pitchType)
+      ?.mean ?? null;
+  const velocityErrorMph =
+    velocityRead !== null && actual.shape.velocity !== null
+      ? Math.abs(velocityRead - actual.shape.velocity)
+      : null;
 
   return {
     pitchTypeRank: pitchRank >= 0 ? pitchRank + 1 : null,
@@ -98,24 +112,30 @@ export function evaluatePitch(
     topPitchProbability: top?.probability ?? 0,
     locationErrorFeet,
     velocityErrorMph,
-    label: revealLabel(pitchTypeProbability, pitchRank + 1)
+    label: revealLabel(
+      pitchTypeProbability,
+      pitchRank >= 0 ? pitchRank + 1 : Infinity,
+    ),
   };
 }
 
 export function locationFromBucket(label: LocationBucket): PitchLocation {
-  const map: Record<LocationBucket, { px: number; pz: number; zone: number | null }> = {
-    "Up In": { px: -0.55, pz: 3.2, zone: 1 },
-    "Up Middle": { px: 0, pz: 3.2, zone: 2 },
-    "Up Away": { px: 0.55, pz: 3.2, zone: 3 },
-    "Middle In": { px: -0.55, pz: 2.45, zone: 4 },
+  const map: Record<
+    LocationBucket,
+    { px: number | null; pz: number | null; zone: number | null }
+  > = {
+    "High left": { px: -0.55, pz: 3.2, zone: 1 },
+    "High middle": { px: 0, pz: 3.2, zone: 2 },
+    "High right": { px: 0.55, pz: 3.2, zone: 3 },
+    "Middle left": { px: -0.55, pz: 2.45, zone: 4 },
     Middle: { px: 0, pz: 2.45, zone: 5 },
-    "Middle Away": { px: 0.55, pz: 2.45, zone: 6 },
-    "Low In": { px: -0.55, pz: 1.7, zone: 7 },
-    "Low Middle": { px: 0, pz: 1.7, zone: 8 },
-    "Low Away": { px: 0.55, pz: 1.7, zone: 9 },
-    "Chase Low": { px: 0, pz: 1.05, zone: 13 },
-    "Chase Away": { px: 1.2, pz: 2.3, zone: 14 },
-    Waste: { px: 1.55, pz: 3.65, zone: null }
+    "Middle right": { px: 0.55, pz: 2.45, zone: 6 },
+    "Low left": { px: -0.55, pz: 1.7, zone: 7 },
+    "Low middle": { px: 0, pz: 1.7, zone: 8 },
+    "Low right": { px: 0.55, pz: 1.7, zone: 9 },
+    "Below zone": { px: 0, pz: 1.05, zone: 13 },
+    "Low wide": { px: 1.2, pz: 2.3, zone: 14 },
+    Untracked: { px: null, pz: null, zone: null },
   };
   return { ...map[label], label };
 }
@@ -132,13 +152,22 @@ export function normalizeStrikeZoneBounds(input: {
   return {
     top: round(input.top, 2),
     bottom: round(input.bottom, 2),
-    width: isFiniteNumber(input.width) && input.width > 0 ? round(input.width, 2) : null,
-    depth: isFiniteNumber(input.depth) && input.depth > 0 ? round(input.depth, 2) : null,
-    source: input.source
+    width:
+      isFiniteNumber(input.width) && input.width > 0
+        ? round(input.width, 2)
+        : null,
+    depth:
+      isFiniteNumber(input.depth) && input.depth > 0
+        ? round(input.depth, 2)
+        : null,
+    source: input.source,
   };
 }
 
-export function estimateStrikeZoneForPitch(currentPitch: Pick<PitchEvent, "matchup">, history: PitchEvent[]): StrikeZoneBounds {
+export function estimateStrikeZoneForPitch(
+  currentPitch: Pick<PitchEvent, "matchup">,
+  history: PitchEvent[],
+): StrikeZoneBounds {
   const sameBatterZones = history
     .filter((pitch) => pitch.matchup.batterId === currentPitch.matchup.batterId)
     .map((pitch) => pitch.location.strikeZone)
@@ -146,38 +175,60 @@ export function estimateStrikeZoneForPitch(currentPitch: Pick<PitchEvent, "match
 
   if (!sameBatterZones.length) return DEFAULT_STRIKE_ZONE;
 
-  return normalizeStrikeZoneBounds({
-    top: average(sameBatterZones.map((zone) => zone.top)),
-    bottom: average(sameBatterZones.map((zone) => zone.bottom)),
-    width: averageNullable(sameBatterZones.map((zone) => zone.width)),
-    depth: averageNullable(sameBatterZones.map((zone) => zone.depth)),
-    source: "estimated"
-  }) ?? DEFAULT_STRIKE_ZONE;
+  return (
+    normalizeStrikeZoneBounds({
+      top: average(sameBatterZones.map((zone) => zone.top)),
+      bottom: average(sameBatterZones.map((zone) => zone.bottom)),
+      width: averageNullable(sameBatterZones.map((zone) => zone.width)),
+      depth: averageNullable(sameBatterZones.map((zone) => zone.depth)),
+      source: "estimated",
+    }) ?? DEFAULT_STRIKE_ZONE
+  );
 }
 
 export function strikeZoneForPitchDisplay(
   currentPitch: Pick<PitchEvent, "id" | "matchup">,
   history: PitchEvent[],
-  revealedPitch?: PitchEvent | null
+  revealedPitch?: PitchEvent | null,
 ): StrikeZoneBounds {
-  const revealedZone = revealedPitch?.id === currentPitch.id ? revealedPitch.location.strikeZone : null;
+  const revealedZone =
+    revealedPitch?.id === currentPitch.id
+      ? revealedPitch.location.strikeZone
+      : null;
   if (revealedZone) return revealedZone;
   return estimateStrikeZoneForPitch(currentPitch, history);
 }
 
-export function bucketFromZone(zone: number | null, px: number | null, pz: number | null): LocationBucket {
-  if (zone === 1) return "Up In";
-  if (zone === 2) return "Up Middle";
-  if (zone === 3) return "Up Away";
-  if (zone === 4) return "Middle In";
-  if (zone === 5) return "Middle";
-  if (zone === 6) return "Middle Away";
-  if (zone === 7) return "Low In";
-  if (zone === 8) return "Low Middle";
-  if (zone === 9) return "Low Away";
-  if (pz !== null && pz < 1.4) return "Chase Low";
-  if (px !== null && Math.abs(px) > 0.95) return "Chase Away";
-  return "Waste";
+export function bucketFromZone(
+  zone: number | null,
+  px: number | null,
+  pz: number | null,
+): LocationBucket {
+  if (px !== null && pz !== null) {
+    if (pz >= 2.85)
+      return px < -0.35
+        ? "High left"
+        : px > 0.35
+          ? "High right"
+          : "High middle";
+    if (pz >= 2)
+      return px < -0.35 ? "Middle left" : px > 0.35 ? "Middle right" : "Middle";
+    if (pz >= 1.35)
+      return px < -0.35 ? "Low left" : px > 0.35 ? "Low right" : "Low middle";
+    return Math.abs(px) > 0.95 ? "Low wide" : "Below zone";
+  }
+  const zones: Record<number, LocationBucket> = {
+    1: "High left",
+    2: "High middle",
+    3: "High right",
+    4: "Middle left",
+    5: "Middle",
+    6: "Middle right",
+    7: "Low left",
+    8: "Low middle",
+    9: "Low right",
+  };
+  return zone !== null ? (zones[zone] ?? "Untracked") : "Untracked";
 }
 
 export function resultSummary(result: PitchResult): string {
@@ -193,8 +244,10 @@ export function resultLabel(result: PitchResult): string {
     called_strike: "called strike",
     whiff: "whiff",
     foul: "foul",
+    foul_tip: "foul tip",
+    foul_bunt: "foul bunt",
     ball_in_play: "ball in play",
-    hit_by_pitch: "hit by pitch"
+    hit_by_pitch: "hit by pitch",
   };
   return labels[result];
 }
@@ -207,17 +260,22 @@ function advanceForcedRunner(bases: BaseState): BaseState {
   return {
     first: true,
     second: bases.first || bases.second,
-    third: bases.second || bases.third
+    third: bases.second || bases.third,
   };
 }
 
-function probabilityFor(items: { label: string; probability: number }[], label: string): number {
+function probabilityFor(
+  items: { label: string; probability: number }[],
+  label: string,
+): number {
   return items
     .filter((item) => item.label === label)
     .reduce((total, item) => total + item.probability, 0);
 }
 
-function sortedProbabilities(items: { label: string; probability: number }[]): { label: string; probability: number }[] {
+function sortedProbabilities(
+  items: { label: string; probability: number }[],
+): { label: string; probability: number }[] {
   const byLabel = new Map<string, number>();
   for (const item of items) {
     byLabel.set(item.label, (byLabel.get(item.label) ?? 0) + item.probability);
@@ -234,7 +292,12 @@ function revealLabel(probability: number, rank: number): RevealLabel {
   return "Very Surprising";
 }
 
-function distance(aX: number | null, aZ: number | null, bX: number | null, bZ: number | null): number | null {
+function distance(
+  aX: number | null,
+  aZ: number | null,
+  bX: number | null,
+  bZ: number | null,
+): number | null {
   if (aX === null || aZ === null || bX === null || bZ === null) return null;
   return Number(Math.hypot(aX - bX, aZ - bZ).toFixed(2));
 }
@@ -244,7 +307,9 @@ function average(values: number[]): number {
 }
 
 function averageNullable(values: Array<number | null>): number | null {
-  const finite = values.filter((value): value is number => isFiniteNumber(value));
+  const finite = values.filter((value): value is number =>
+    isFiniteNumber(value),
+  );
   return finite.length ? average(finite) : null;
 }
 

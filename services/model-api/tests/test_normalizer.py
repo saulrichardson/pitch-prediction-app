@@ -108,7 +108,10 @@ def test_normalizes_real_model_response_to_product_prediction():
     assert response.modelVersion == "pitchpredict-xlstm-v0.5.0"
     assert response.pitchMix[0].label == "FF"
     assert any(item.label == "Other" for item in response.pitchMix)
-    assert response.location.expected.label == "Middle"
+    assert response.location.expected.label == "Low right"
+    assert response.location.expected.px == 0.4
+    assert response.location.expected.pz == 1.8
+    assert response.pitchMixSource == "model"
     assert len(response.possiblePitches) == 4
     assert response.possiblePitches[0].description
     assert [item.label for item in response.resultMix] == [
@@ -121,9 +124,8 @@ def test_normalizes_real_model_response_to_product_prediction():
         "0-1",
         "1-0",
         "Ball in play",
-        "Hit by pitch",
     ]
-    assert {item.label for item in response.paForecast}
+    assert response.sampleSize == 4
     assert sum(item.probability for item in response.resultMix) == pytest.approx(1.0, abs=0.002)
     assert sum(item.probability for item in response.countImpact) == pytest.approx(1.0, abs=0.002)
 
@@ -139,21 +141,53 @@ def test_derives_pitch_mix_from_sampled_pitches_when_probability_table_is_missin
     assert sum(item.probability for item in response.pitchMix) == pytest.approx(1.0, abs=0.002)
 
 
-def test_pa_forecast_preserves_manager_visible_terminal_categories():
-    request = PredictionRequest.model_validate(request_payload())
-    response = normalize_prediction(request, raw_model_response(), "pitchpredict-xlstm-v0.5.0")
-
-    assert [item.label for item in response.paForecast] == [
-        "Still alive after 8 pitches",
-        "Ball in play",
-        "Strikeout",
-        "Walk",
-        "Hit by pitch",
-    ]
-    assert sum(item.probability for item in response.paForecast) == pytest.approx(1.0, abs=0.002)
-
-
 def test_rejects_raw_model_response_without_possible_pitches():
     request = PredictionRequest.model_validate(request_payload(history=[]))
     with pytest.raises(ValueError, match="no concrete possible pitches"):
         normalize_prediction(request, {"basic_pitch_data": {}, "pitches": []}, "pitchpredict-xlstm-v0.5.0")
+
+
+@pytest.mark.parametrize("result, expected", [("foul", "1-2"), ("foul_tip", "Strikeout"), ("foul_bunt", "Strikeout"), ("swinging_strike", "Strikeout")])
+def test_two_strike_count_forecasts_preserve_real_result_rules(result, expected):
+    payload = request_payload([])
+    payload["count"] = {"balls": 1, "strikes": 2}
+    raw = {"pitches": [{"pitch_type": "FF", "speed": 95, "plate_pos_x": 0, "plate_pos_z": 2.5, "result": result}] * 8}
+    response = normalize_prediction(PredictionRequest(**payload), raw, "test-model")
+    assert [(p.label, p.probability) for p in response.countImpact] == [(expected, 1.0)]
+    assert "paForecast" not in response.model_dump()
+
+
+def test_velocity_uses_all_samples_of_the_same_pitch_type():
+    raw = raw_model_response()
+    raw["pitches"].append({**raw["pitches"][0], "speed": 93.9})
+    response = normalize_prediction(PredictionRequest(**request_payload([])), raw, "test-model")
+    estimate = next(v for v in response.velocity if v.pitchType == "FF")
+    assert estimate.mean == 95.0
+    assert estimate.sampleCount == 2
+
+
+def test_unknown_result_fails_instead_of_becoming_a_called_strike():
+    raw = raw_model_response()
+    raw["pitches"][0]["result"] = "unknown_result"
+    with pytest.raises(ValueError, match="Unsupported"):
+        normalize_prediction(PredictionRequest(**request_payload([])), raw, "test-model")
+
+
+def test_missing_generated_measurements_are_not_replaced_with_typical_values():
+    request = PredictionRequest.model_validate(request_payload())
+    raw = {"pitches": [{"pitch_type": "FF", "result": "ball"}]}
+    response = normalize_prediction(request, raw, "test")
+    assert response.pitchMixSource == "samples"
+    assert response.velocity == []
+    assert response.possiblePitches[0].velocity is None
+    assert response.location.expected.px is None
+    assert response.location.expected.pz is None
+    assert response.location.expected.label == "Untracked"
+
+
+def test_preserves_small_probabilities_without_rounding_them_to_zero():
+    request = PredictionRequest.model_validate(request_payload())
+    raw = raw_model_response()
+    raw["basic_pitch_data"]["pitch_type_probs"] = {"FF": .9999, "SL": .0001}
+    response = normalize_prediction(request, raw, "test")
+    assert next(item.probability for item in response.pitchMix if item.label == "SL") == .0001

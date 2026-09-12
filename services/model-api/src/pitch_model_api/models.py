@@ -6,20 +6,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 PitchType = Literal["FF", "SI", "SL", "CH", "CU", "FC", "FS", "Other"]
-PitchResult = Literal["ball", "called_strike", "whiff", "foul", "ball_in_play", "hit_by_pitch"]
+PitchResult = Literal["ball", "called_strike", "whiff", "foul", "foul_tip", "foul_bunt", "ball_in_play", "hit_by_pitch"]
 LocationBucket = Literal[
-    "Up In",
-    "Up Middle",
-    "Up Away",
-    "Middle In",
+    "High left",
+    "High middle",
+    "High right",
+    "Middle left",
     "Middle",
-    "Middle Away",
-    "Low In",
-    "Low Middle",
-    "Low Away",
-    "Chase Low",
-    "Chase Away",
-    "Waste",
+    "Middle right",
+    "Low left",
+    "Low middle",
+    "Low right",
+    "Below zone",
+    "Low wide",
+    "Untracked",
 ]
 
 
@@ -84,7 +84,7 @@ class PitchEvent(BaseModel):
     paId: str
     pitchNumber: int
     gamePitchIndex: int
-    source: Literal["actual", "alternate", "generated"]
+    source: Literal["actual"]
     pitchType: PitchType
     result: PitchResult
     location: PitchLocation
@@ -121,7 +121,7 @@ class Probability(BaseModel):
 
 class PossiblePitch(BaseModel):
     pitchType: PitchType
-    velocity: float
+    velocity: float | None
     location: PitchLocation
     result: PitchResult
     description: str
@@ -132,15 +132,22 @@ class PredictionLocation(BaseModel):
     expected: PitchLocation
 
 
+class VelocityEstimate(BaseModel):
+    pitchType: PitchType
+    mean: float
+    sampleCount: int = Field(gt=0)
+
+
 class PredictionResponse(BaseModel):
     id: str
     modelVersion: str
     pitchMix: list[Probability]
+    pitchMixSource: Literal["model", "samples"]
     resultMix: list[Probability]
     location: PredictionLocation
     countImpact: list[Probability]
-    paForecast: list[Probability]
-    expectedPitchesRemaining: float = Field(ge=0)
+    sampleSize: int = Field(gt=0)
+    velocity: list[VelocityEstimate]
     possiblePitches: list[PossiblePitch]
     createdAt: str
 

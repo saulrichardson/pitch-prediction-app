@@ -168,3 +168,11 @@ export const auditEvents = pgTable(
     actionIdx: index("audit_events_action_idx").on(table.action)
   })
 );
+
+// Active prepared replay storage. Earlier tables remain only for historical data.
+export const replayRecords = pgTable("replay_records", {
+  key: text("key").primaryKey(),
+  revision: integer("revision").notNull(),
+  value: jsonb("value").notNull(),
+  expiresAt: integer("expires_at")
+});

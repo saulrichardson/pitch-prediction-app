@@ -15,7 +15,7 @@
     "deploy:serverless": "AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} cdk deploy PitchSequenceServerlessStack --require-approval never"
   },
   "devDependencies": {
-    "aws-cdk": "^2.1036.0",
+    "aws-cdk": "^2.1141.0",
     "aws-cdk-lib": "^2.253.1",
     "constructs": "^10.4.3",
     "tsx": "^4.21.0"

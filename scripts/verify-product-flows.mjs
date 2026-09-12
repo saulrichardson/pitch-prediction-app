@@ -1,209 +1,212 @@
 #!/usr/bin/env node
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
 
-const baseUrl = (process.env.BASE_URL ?? process.env.VERIFY_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
-
-const results = [];
-
-function assert(condition, message, details) {
-  if (!condition) {
-    const suffix = details === undefined ? "" : `\n${JSON.stringify(details, null, 2)}`;
-    throw new Error(`${message}${suffix}`);
-  }
-}
-
-function createClient() {
-  const cookies = new Map();
-  return {
-    async request(path, options = {}) {
-      const headers = new Headers(options.headers ?? {});
-      if (options.body !== undefined) headers.set("content-type", "application/json");
-      if (cookies.size > 0) {
-        headers.set("cookie", Array.from(cookies.entries()).map(([key, value]) => `${key}=${value}`).join("; "));
-      }
-      const response = await fetch(`${baseUrl}${path}`, {
-        method: options.method ?? "GET",
-        headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body)
-      });
-      const setCookies = typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : [response.headers.get("set-cookie")].filter(Boolean);
-      for (const setCookie of setCookies) {
-        const [pair] = setCookie.split(";");
-        const [key, value] = pair.split("=");
-        if (key && value !== undefined) cookies.set(key, value);
-      }
-      const text = await response.text();
-      const payload = text ? JSON.parse(text) : null;
-      return { response, payload };
-    },
-    cookieHeader() {
-      return Array.from(cookies.entries()).map(([key, value]) => `${key}=${value}`).join("; ");
+const baseUrl = (process.env.BASE_URL ?? "http://127.0.0.1:3000").replace(
+  /\/$/,
+  "",
+);
+const timings = [];
+const checks = [];
+function client() {
+  let cookie = "";
+  return async (path, body, extraHeaders = {}) => {
+    const serialized = body === undefined ? undefined : JSON.stringify(body);
+    const headers = { cookie, ...extraHeaders };
+    if (serialized !== undefined) {
+      headers["content-type"] = "application/json";
+      headers["x-amz-content-sha256"] = createHash("sha256")
+        .update(serialized)
+        .digest("hex");
     }
+    const started = performance.now();
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: serialized === undefined ? "GET" : "POST",
+      headers,
+      body: serialized,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const setCookie = response.headers.getSetCookie();
+    if (setCookie.length)
+      cookie = setCookie.map((value) => value.split(";")[0]).join("; ");
+    const payload = await response.json();
+    return {
+      status: response.status,
+      payload,
+      ms: performance.now() - started,
+      cache: response.headers.get("cache-control"),
+    };
   };
 }
-
-async function step(name, fn) {
-  const started = Date.now();
-  try {
-    const summary = await fn();
-    results.push({ name, status: "pass", ms: Date.now() - started, summary });
-    console.log(`PASS ${name}${summary ? ` - ${summary}` : ""}`);
-  } catch (error) {
-    results.push({ name, status: "fail", ms: Date.now() - started, summary: error.message });
-    console.error(`FAIL ${name}\n${error.stack}`);
-    process.exitCode = 1;
-    throw error;
-  }
+async function check(name, run) {
+  await run();
+  checks.push(name);
+  console.log(`PASS ${name}`);
 }
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForTimelineJob(client, jobId, timeoutMs = 360000) {
-  const started = Date.now();
-  let latest;
-  while (Date.now() - started < timeoutMs) {
-    latest = await client.request(`/api/timeline-jobs/${jobId}`);
-    assert(latest.response.ok, "timeline start job should be readable by the workspace", latest.payload);
-    const status = latest.payload.job?.status;
-    if (status === "succeeded" && latest.payload.timeline) return latest.payload.timeline;
-    if (status === "failed") {
-      throw new Error(`timeline start job failed: ${latest.payload.job?.error?.message ?? "unknown error"}`);
-    }
-    await sleep(2500);
-  }
-  throw new Error(`timeline start job did not complete within ${Math.round(timeoutMs / 1000)} seconds\n${JSON.stringify(latest?.payload, null, 2)}`);
-}
-
-const anon = createClient();
-const client = createClient();
-let latestGame;
+const owner = client();
+const stranger = client();
 let replay;
-let timeline;
-let workspaceId;
+let edition;
+const commands = () => `/api/replays/${replay.id}`;
+async function act(action) {
+  const response = await owner(commands(), {
+    id: randomUUID(),
+    expectedRevision: replay.revision,
+    action,
+  });
+  assert.equal(response.status, 200, JSON.stringify(response.payload));
+  assert.equal(response.cache, "no-store");
+  timings.push({ action, ms: Math.round(response.ms) });
+  replay = response.payload.replay;
+}
+function hidden(view) {
+  assert.equal(view.actual, null);
+  for (const field of [
+    "pitchType",
+    "result",
+    "location",
+    "shape",
+    "description",
+    "postState",
+  ])
+    assert.equal(field in view.current, false, `Hidden field: ${field}`);
+  assert.equal("awayScore" in view.edition.game, false);
+  assert.equal("request" in view, false);
+  assert.equal(view.history.length, view.index);
+}
 
-await step("public health and readiness endpoints respond", async () => {
-  let health;
-  let ready;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    health = await anon.request("/health");
-    ready = await anon.request("/ready");
-    if (health.response.ok && ready.response.ok) break;
-    await sleep(5000);
-  }
-  assert(health.response.ok, "/health should be public and healthy", health.payload);
-  assert(ready.response.ok, "/ready should be healthy", ready.payload);
-  assert(ready.payload.status === "ok", "/ready should report status ok", ready.payload);
-  assert(["memory", "dynamodb", "postgres"].includes(ready.payload.storageMode), "/ready should report explicit storage mode", ready.payload);
-  assert(["ok", "configured", "unavailable"].includes(ready.payload.model), "/ready should report real model status", ready.payload);
-  assert(["ok", "configured"].includes(ready.payload.model), "product-flow verification requires the real model boundary to be configured", ready.payload);
-  return `model=${ready.payload.model}, storage=${ready.payload.storageMode}`;
+await check("readiness requires a complete published replay", async () => {
+  assert.equal((await owner("/health")).status, 200);
+  const ready = await owner("/ready");
+  assert.equal(ready.status, 200, JSON.stringify(ready.payload));
+  assert.ok(ready.payload.editionId);
+  edition = (await owner("/api/replays")).payload.edition;
+  assert.ok(edition.pitchCount >= 3 && edition.pitchCount <= 8);
 });
-
-await step("anonymous workspace session is issued automatically", async () => {
-  const session = await client.request("/api/auth/session");
-  assert(session.response.ok, "session endpoint should respond", session.payload);
-  assert(session.payload.session?.workspaceId, "session endpoint should return workspace session", session.payload);
-  assert(session.payload.session?.anonymous === true, "session should be anonymous", session.payload);
-  workspaceId = session.payload.session.workspaceId;
-  return `workspace=${workspaceId}`;
+await check(
+  "start is idempotent and actual pitch facts stay hidden",
+  async () => {
+    const opened = await owner("/api/replays", { editionId: edition.id });
+    assert.equal(opened.status, 200, JSON.stringify(opened.payload));
+    replay = opened.payload.replay;
+    hidden(replay);
+    assert.equal(replay.step, 0);
+    assert.deepEqual(
+      (await owner("/api/replays", { editionId: edition.id })).payload.replay,
+      replay,
+    );
+  },
+);
+await check(
+  "ownership, command validation, and origin checks reject invalid work",
+  async () => {
+    assert.equal((await stranger(commands())).status, 404);
+    assert.equal((await owner(commands(), null)).status, 400);
+    assert.equal(
+      (
+        await owner(commands(), {
+          id: randomUUID(),
+          expectedRevision: 0,
+          action: "next",
+        })
+      ).status,
+      409,
+    );
+    assert.equal(
+      (
+        await owner(
+          commands(),
+          { id: randomUUID(), expectedRevision: 0, action: "reveal" },
+          { origin: "https://other.example" },
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await owner(
+          commands(),
+          { id: randomUUID(), expectedRevision: 0, action: "reveal" },
+          { origin: "null" },
+        )
+      ).status,
+      403,
+    );
+  },
+);
+await check(
+  "lost responses retry exactly once and stale writes conflict",
+  async () => {
+    const command = {
+      id: randomUUID(),
+      expectedRevision: replay.revision,
+      action: "reveal",
+    };
+    const once = await owner(commands(), command);
+    assert.equal(once.status, 200);
+    const twice = await owner(commands(), command);
+    assert.deepEqual(twice.payload.replay, once.payload.replay);
+    replay = twice.payload.replay;
+    assert.equal(replay.step, 1);
+    assert.equal(
+      (await owner(commands(), { ...command, id: randomUUID() })).status,
+      409,
+    );
+    assert.deepEqual((await owner(commands())).payload.replay, replay);
+  },
+);
+await check("Back and Next preserve the exact saved forecast", async () => {
+  await act("next");
+  hidden(replay);
+  const forecast = replay.prediction;
+  const zone = replay.strikeZone;
+  await act("back");
+  await act("next");
+  assert.deepEqual(replay.prediction, forecast);
+  assert.deepEqual(replay.strikeZone, zone);
+  assert.deepEqual((await owner(commands())).payload.replay, replay);
 });
-
-await step("latest Mets game and replay can be loaded", async () => {
-  const latest = await client.request("/api/games/mets/latest");
-  assert(latest.response.ok, "latest Mets game should load", latest.payload);
-  latestGame = latest.payload.game;
-  assert(latestGame?.gamePk, "latest response should include gamePk", latest.payload);
-  assert(latestGame?.label, "latest response should include game label", latest.payload);
-
-  const replayResponse = await client.request(`/api/games/${latestGame.gamePk}/replay`);
-  assert(replayResponse.response.ok, "replay should load", replayResponse.payload);
-  replay = replayResponse.payload.replay;
-  assert(replay.game.gamePk === latestGame.gamePk, "replay should match latest game", replay);
-  assert(typeof replay.pitchCount === "number" && replay.pitchCount > 20, "replay should expose a pitch count", { count: replay.pitchCount });
-  assert(!("pitches" in replay), "replay API should not expose actual pitch events before reveal", replay);
-  return `${latestGame.label}, pitches=${replay.pitchCount}`;
+await check("concurrent commands have one authoritative winner", async () => {
+  const expectedRevision = replay.revision;
+  const responses = await Promise.all(
+    ["reveal", "reveal"].map((action) =>
+      owner(commands(), { id: randomUUID(), action, expectedRevision }),
+    ),
+  );
+  assert.deepEqual(responses.map((value) => value.status).sort(), [200, 409]);
+  replay = (await owner(commands())).payload.replay;
+  assert.equal(replay.revision, expectedRevision + 1);
 });
-
-await step("actual timeline starts before reveal with prediction visible", async () => {
-  const created = await client.request("/api/timeline-jobs", { method: "POST", body: { gamePk: latestGame.gamePk } });
-  assert(created.response.status === 202, "timeline start should return an async job", created.payload);
-  assert(created.payload.job?.id, "timeline start should include a job id", created.payload);
-  assert(["pending", "running"].includes(created.payload.job.status), "timeline start job should begin pending or running", created.payload);
-  timeline = await waitForTimelineJob(client, created.payload.job.id);
-  assert(timeline.mode === "real-game", "timeline should be real-game mode", timeline);
-  assert(timeline.currentPitchIndex === 0, "timeline should start on first pitch", timeline);
-  assert(timeline.actualRevealed === false, "actual pitch should start hidden", timeline);
-  assert(timeline.actualHistory.length === 0, "actual history should start empty", timeline);
-  assert(!("actualPitches" in timeline), "client timeline should not expose full actual pitch list", timeline);
-  assert(timeline.currentPitch?.matchup?.pitcherName && timeline.currentPitch?.matchup?.batterName, "current pitch context should include matchup names", timeline.currentPitch);
-  assert(timeline.currentPitch.preState.count.balls === 0 && timeline.currentPitch.preState.count.strikes === 0, "first pitch should start 0-0", timeline.currentPitch.preState);
-  assert(!("pitchType" in timeline.currentPitch), "current pitch context should not expose hidden pitch type", timeline.currentPitch);
-  assert(!("result" in timeline.currentPitch), "current pitch context should not expose hidden pitch result", timeline.currentPitch);
-  assert(!("location" in timeline.currentPitch), "current pitch context should not expose hidden pitch location", timeline.currentPitch);
-  assert(!("shape" in timeline.currentPitch), "current pitch context should not expose hidden pitch shape", timeline.currentPitch);
-  assert(timeline.nextPitchContext === null, "next pitch context should not be exposed before current reveal", timeline);
-  assert(timeline.actualPrediction?.pitchMix?.length > 0, "prediction should be populated before reveal", timeline.actualPrediction);
-  assert(timeline.actualPrediction?.resultMix?.length > 0, "result prediction should be populated before reveal", timeline.actualPrediction);
-  assert(timeline.actualPrediction?.location?.expected?.label, "location prediction should be populated before reveal", timeline.actualPrediction);
-  assert(!String(timeline.actualPrediction.modelVersion ?? "").toLowerCase().includes("mock"), "prediction must not come from a mock model", timeline.actualPrediction);
-  return `top=${timeline.actualPrediction.pitchMix[0].label}`;
-});
-
-await step("invalid advance before reveal is rejected", async () => {
-  const response = await client.request(`/api/timelines/${timeline.id}/advance`, { method: "POST", body: {} });
-  assert(!response.response.ok, "advance before reveal should not be allowed", response.payload);
-  assert(String(response.payload.error ?? "").includes("Reveal"), "error should explain reveal requirement", response.payload);
-});
-
-await step("optional JSON routes reject null bodies without 500s", async () => {
-  const advanceNull = await client.request(`/api/timelines/${timeline.id}/advance`, { method: "POST", body: null });
-  assert(advanceNull.response.status === 400, "advance null body should be a 400", advanceNull.payload);
-  assert(advanceNull.payload.code === "invalid_json_object", "advance null body should use a stable error code", advanceNull.payload);
-});
-
-await step("reveal actual scores the pitch against the stored prediction", async () => {
-  const reveal = await client.request(`/api/timelines/${timeline.id}/reveal`, { method: "POST", body: {} });
-  assert(reveal.response.ok, "reveal should succeed", reveal.payload);
-  timeline = reveal.payload.timeline;
-  const pitch = reveal.payload.pitch;
-  const evaluation = reveal.payload.evaluation;
-  assert(timeline.actualRevealed === true, "timeline should mark actual as revealed", timeline);
-  assert(pitch.source === "actual", "revealed pitch should be actual", pitch);
-  assert(timeline.nextPitchContext === null || !("pitchType" in timeline.nextPitchContext), "next pitch context should stay redacted after reveal", timeline.nextPitchContext);
-  assert(typeof evaluation.pitchTypeProbability === "number", "evaluation should include pitch probability", evaluation);
-  assert(typeof evaluation.resultProbability === "number", "evaluation should include result probability", evaluation);
-  assert(["Expected", "Plausible", "Surprising", "Very Surprising"].includes(evaluation.label), "evaluation should include expectedness label", evaluation);
-  return `${pitch.pitchType} ${pitch.result}, ${evaluation.label}`;
-});
-
-await step("next pitch advances actual history and recomputes prediction", async () => {
-  const advanced = await client.request(`/api/timelines/${timeline.id}/advance`, { method: "POST", body: {} });
-  assert(advanced.response.ok, "advance after reveal should succeed", advanced.payload);
-  timeline = advanced.payload.timeline;
-  assert(timeline.currentPitchIndex === 1, "timeline should advance to pitch two", timeline);
-  assert(timeline.actualHistory.length === 1, "actual history should include revealed previous pitch", timeline);
-  assert(timeline.actualRevealed === false, "next actual pitch should be hidden", timeline);
-  assert(timeline.actualPrediction?.id, "next prediction should be present", timeline.actualPrediction);
-  return `pitchIndex=${timeline.currentPitchIndex}`;
-});
-
-await step("timeline access is scoped to the anonymous workspace", async () => {
-  const other = createClient();
-  const otherSession = await other.request("/api/auth/session");
-  assert(otherSession.response.ok, "second workspace session should be issued", otherSession.payload);
-  assert(otherSession.payload.session?.workspaceId && otherSession.payload.session.workspaceId !== workspaceId, "second client should get a distinct workspace", otherSession.payload);
-  const forbidden = await other.request(`/api/timelines/${timeline.id}/reveal`, { method: "POST", body: {} });
-  assert(!forbidden.response.ok, "second workspace should not operate on first workspace timeline", forbidden.payload);
-  assert(String(forbidden.payload.error ?? "").includes("Timeline not found"), "workspace-scoped miss should be explicit", forbidden.payload);
-});
-
-console.log("\nProduct-flow verification complete.");
-console.log(JSON.stringify({
+await check(
+  "every remaining pitch completes without generation or a dead end",
+  async () => {
+    while (replay.phase !== "complete") {
+      await act(replay.phase === "forecast" ? "reveal" : "next");
+      if (replay.phase === "forecast") hidden(replay);
+    }
+    assert.equal(replay.history.length, edition.pitchCount);
+    assert.equal(replay.summary.pitches, edition.pitchCount);
+    assert.ok(replay.actual);
+    await act("restart");
+    hidden(replay);
+    assert.equal(replay.step, 0);
+  },
+);
+const sorted = timings.map((value) => value.ms).sort((a, b) => a - b);
+const report = {
   baseUrl,
-  passed: results.filter((result) => result.status === "pass").length,
-  failed: results.filter((result) => result.status === "fail").length,
-  checks: results
-}, null, 2));
+  checks: checks.length,
+  editionId: edition.id,
+  pitches: edition.pitchCount,
+  commands: timings,
+  latency: {
+    medianMs: sorted[Math.floor(sorted.length / 2)],
+    p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1],
+    maxMs: sorted.at(-1),
+  },
+};
+console.log(JSON.stringify(report, null, 2));
+assert.ok(
+  report.latency.maxMs < Number(process.env.VERIFY_MAX_COMMAND_MS ?? 2000),
+  "Replay commands exceeded the configured latency budget.",
+);

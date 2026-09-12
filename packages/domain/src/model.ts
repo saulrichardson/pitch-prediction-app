@@ -1,81 +1,112 @@
 import { z } from "zod";
-import type {
-  PitchEvent,
-  PredictionRequest
-} from "./types";
+import type { PitchEvent, PredictionRequest } from "./types";
 import { estimateStrikeZoneForPitch } from "./state";
 
-const pitchLocationSchema = z.object({
-  px: z.number().nullable(),
-  pz: z.number().nullable(),
-  zone: z.number().nullable(),
-  label: z.string(),
-  strikeZone: z.object({
-    top: z.number(),
-    bottom: z.number(),
-    width: z.number().nullable(),
-    depth: z.number().nullable(),
-    source: z.enum(["measured", "estimated", "default"])
-  }).nullable().optional()
-});
+import {
+  basesSchema,
+  countSchema,
+  distribution,
+  handSchema,
+  pitchEventSchema,
+  pitchLocationSchema,
+  pitchTypeSchema,
+  resultSchema,
+  zoneSchema,
+} from "./validation";
 
 export const predictionRequestSchema = z.object({
-  pitcherId: z.string(),
-  batterId: z.string(),
-  pitcherHand: z.enum(["L", "R", "S", "Unknown"]),
-  batterSide: z.enum(["L", "R", "S", "Unknown"]),
-  gameDate: z.string(),
-  count: z.object({ balls: z.number().int().min(0).max(3), strikes: z.number().int().min(0).max(2) }),
+  pitcherId: z.string().min(1),
+  batterId: z.string().min(1),
+  pitcherHand: handSchema,
+  batterSide: handSchema,
+  gameDate: z.iso.date(),
+  count: countSchema,
   outs: z.number().int().min(0).max(2),
-  bases: z.object({ first: z.boolean(), second: z.boolean(), third: z.boolean() }),
-  score: z.object({ away: z.number(), home: z.number() }),
+  bases: basesSchema,
+  score: z.object({
+    away: z.number().int().nonnegative(),
+    home: z.number().int().nonnegative(),
+  }),
   inning: z.number().int().positive(),
   half: z.enum(["top", "bottom"]),
-  pitchNumber: z.number().int().nonnegative(),
-  timesThroughOrder: z.number().int().nonnegative(),
-  strikeZone: z.object({ top: z.number(), bottom: z.number() }),
-  pitcherSessionHistory: z.array(z.unknown()),
-  currentPaHistory: z.array(z.unknown())
+  pitchNumber: z.number().int().positive(),
+  timesThroughOrder: z.number().int().positive(),
+  strikeZone: zoneSchema,
+  pitcherSessionHistory: z.array(pitchEventSchema),
+  currentPaHistory: z.array(pitchEventSchema),
 });
 
-export const predictionResponseSchema = z.object({
-  id: z.string(),
-  modelVersion: z.string(),
-  pitchMix: z.array(z.object({ label: z.string(), probability: z.number().min(0).max(1) })),
-  resultMix: z.array(z.object({ label: z.string(), probability: z.number().min(0).max(1) })),
-  location: z.object({
-    density: z.array(z.object({ label: z.string(), probability: z.number().min(0).max(1) })),
-    expected: pitchLocationSchema
-  }),
-  countImpact: z.array(z.object({ label: z.string(), probability: z.number().min(0).max(1) })),
-  paForecast: z.array(z.object({ label: z.string(), probability: z.number().min(0).max(1) })),
-  expectedPitchesRemaining: z.number().min(0),
-  possiblePitches: z.array(z.object({
-    pitchType: z.enum(["FF", "SI", "SL", "CH", "CU", "FC", "FS", "Other"]),
-    velocity: z.number(),
-    location: pitchLocationSchema,
-    result: z.enum(["ball", "called_strike", "whiff", "foul", "ball_in_play", "hit_by_pitch"]),
-    description: z.string()
-  })),
-  createdAt: z.string()
-});
+export const predictionResponseSchema = z
+  .object({
+    id: z.string().min(1),
+    modelVersion: z.string().min(1),
+    pitchMix: distribution(pitchTypeSchema),
+    pitchMixSource: z.enum(["model", "samples"]),
+    resultMix: distribution(),
+    location: z.object({
+      density: distribution(),
+      expected: pitchLocationSchema,
+    }),
+    countImpact: distribution(),
+    sampleSize: z.number().int().positive(),
+    velocity: z
+      .array(
+        z.object({
+          pitchType: pitchTypeSchema,
+          mean: z.number().finite(),
+          sampleCount: z.number().int().positive(),
+        }),
+      )
+      .max(8),
+    possiblePitches: z
+      .array(
+        z.object({
+          pitchType: pitchTypeSchema,
+          velocity: z.number().finite().nullable(),
+          location: pitchLocationSchema,
+          result: resultSchema,
+          description: z.string(),
+        }),
+      )
+      .min(1)
+      .max(4),
+    createdAt: z.iso.datetime({ offset: true }),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      new Set(value.velocity.map((item) => item.pitchType)).size !==
+        value.velocity.length ||
+      value.velocity.reduce((sum, item) => sum + item.sampleCount, 0) >
+        value.sampleSize
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Velocity sample counts do not match the forecast.",
+      });
+  });
 
 export function buildPredictionRequest(input: {
   currentPitch: PitchEvent;
   history: PitchEvent[];
   gameDate: string;
-  pitchNumber: number;
 }): PredictionRequest {
-  const currentPaHistory = input.history.filter((pitch) => pitch.paId === input.currentPitch.paId);
+  const currentPaHistory = input.history.filter(
+    (pitch) => pitch.paId === input.currentPitch.paId,
+  );
   const pitcherSessionHistory = input.history.filter(
-    (pitch) => pitch.matchup.pitcherId === input.currentPitch.matchup.pitcherId
+    (pitch) => pitch.matchup.pitcherId === input.currentPitch.matchup.pitcherId,
   );
   const outs = input.currentPitch.preState.outs;
   if (outs === 3) {
-    throw new Error("Cannot build a prediction from a terminal half-inning state.");
+    throw new Error(
+      "Cannot build a prediction from a terminal half-inning state.",
+    );
   }
   const liveOuts: PredictionRequest["outs"] = outs;
-  const strikeZone = estimateStrikeZoneForPitch(input.currentPitch, input.history);
+  const strikeZone = estimateStrikeZoneForPitch(
+    input.currentPitch,
+    input.history,
+  );
 
   return {
     pitcherId: input.currentPitch.matchup.pitcherId,
@@ -88,14 +119,23 @@ export function buildPredictionRequest(input: {
     bases: input.currentPitch.preState.bases,
     score: {
       away: input.currentPitch.preState.awayScore,
-      home: input.currentPitch.preState.homeScore
+      home: input.currentPitch.preState.homeScore,
     },
     inning: input.currentPitch.preState.inning,
     half: input.currentPitch.preState.half,
-    pitchNumber: input.pitchNumber,
-    timesThroughOrder: Math.floor(input.currentPitch.gamePitchIndex / 18) + 1,
+    pitchNumber: input.currentPitch.pitchNumber,
+    timesThroughOrder:
+      new Set(
+        pitcherSessionHistory
+          .filter(
+            (pitch) =>
+              pitch.matchup.batterId === input.currentPitch.matchup.batterId &&
+              pitch.paId !== input.currentPitch.paId,
+          )
+          .map((pitch) => pitch.paId),
+      ).size + 1,
     strikeZone: { top: strikeZone.top, bottom: strikeZone.bottom },
     pitcherSessionHistory,
-    currentPaHistory
+    currentPaHistory,
   };
 }

@@ -16,4 +16,4 @@ export function getStorage(): Storage {
   return storage;
 }
 
-export type { Storage } from "./types";
+export type { Storage, StoredRecord } from "./types";

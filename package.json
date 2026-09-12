@@ -11,22 +11,26 @@
   "scripts": {
     "dev": "STORAGE_MODE=${STORAGE_MODE:-memory} npm --workspace @pitch/web run dev",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm --workspace @pitch/web exec next typegen && npm run typecheck --workspaces --if-present && tsc -p scripts/tsconfig.json",
     "test": "vitest run",
-    "test:model": "uv run --directory services/model-api pytest",
+    "test:model": "uv run --directory services/model-api python -m pytest",
     "test:e2e": "playwright test",
     "lint": "npm run lint --workspaces --if-present",
     "db:generate": "npm --workspace @pitch/db run db:generate",
     "db:migrate": "npm --workspace @pitch/db run db:migrate",
     "infra:synth": "npm --workspace @pitch/infra run synth",
-    "verify:product": "node scripts/verify-product-flows.mjs"
+    "verify:product": "node scripts/verify-product-flows.mjs",
+    "prepare:replay": "node --import tsx scripts/prepare-replay.ts",
+    "fixture:replay": "node --import tsx scripts/write-test-edition.ts",
+    "verify:local": "node scripts/verify-local.mjs",
+    "publish:replay": "node --import tsx scripts/publish-replay.ts"
   },
   "engines": {
     "node": ">=24.0.0",
     "npm": ">=11.0.0"
   },
   "dependencies": {
-    "postcss": "8.5.14"
+    "postcss": "8.5.28"
   },
   "devDependencies": {
     "@emnapi/core": "^1.10.0",
@@ -40,15 +44,14 @@
     "drizzle-kit": "^0.31.8",
     "eslint": "^9.39.2",
     "jsdom": "^27.3.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.0.16"
   },
   "overrides": {
     "esbuild": "^0.28.0",
     "fast-uri": "3.1.2",
-    "postcss": "8.5.14",
-    "next@16.2.6": {
-      "postcss": "8.5.14"
-    }
+    "postcss": "8.5.28"
   }
 }

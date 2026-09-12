@@ -10,13 +10,29 @@ MODEL_LAMBDA_FUNCTION_NAME="${MODEL_LAMBDA_FUNCTION_NAME:-pitch-sequence-serverl
 MODEL_LAMBDA_ALIAS="${MODEL_LAMBDA_ALIAS:-live}"
 MODEL_LAMBDA_ARCHITECTURE="${MODEL_LAMBDA_ARCHITECTURE:-x86_64}"
 MODEL_LAMBDA_PROVISIONED_CONCURRENCY="${MODEL_LAMBDA_PROVISIONED_CONCURRENCY:-0}"
-MODEL_LAMBDA_RESERVED_CONCURRENCY="${MODEL_LAMBDA_RESERVED_CONCURRENCY:-2}"
+MODEL_LAMBDA_RESERVED_CONCURRENCY="${MODEL_LAMBDA_RESERVED_CONCURRENCY:-1}"
 MODEL_LAMBDA_TIMEOUT_SECONDS="${MODEL_LAMBDA_TIMEOUT_SECONDS:-300}"
 MODEL_LAMBDA_MEMORY_MB="${MODEL_LAMBDA_MEMORY_MB:-1024}"
+MODEL_LAMBDA_SNAPSTART="${MODEL_LAMBDA_SNAPSTART:-1}"
 MODEL_IMAGE_TAG="${MODEL_IMAGE_TAG:-model-serverless-$(git rev-parse --short=12 HEAD)}"
 export MODEL_ECR_REPOSITORY_NAME MODEL_LAMBDA_FUNCTION_NAME MODEL_LAMBDA_ALIAS
 export MODEL_LAMBDA_ARCHITECTURE MODEL_LAMBDA_PROVISIONED_CONCURRENCY MODEL_LAMBDA_RESERVED_CONCURRENCY
 export MODEL_LAMBDA_TIMEOUT_SECONDS MODEL_LAMBDA_MEMORY_MB MODEL_IMAGE_TAG
+export MODEL_LAMBDA_SNAPSTART
+
+case "${MODEL_LAMBDA_SNAPSTART}" in
+  0 | [Ff][Aa][Ll][Ss][Ee] | [Nn][Oo] | [Oo][Ff][Ff]) snapstart_enabled=0 ;;
+  1 | [Tt][Rr][Uu][Ee] | [Yy][Ee][Ss] | [Oo][Nn]) snapstart_enabled=1 ;;
+  *)
+    echo "MODEL_LAMBDA_SNAPSTART must be true or false." >&2
+    exit 1
+    ;;
+esac
+
+if [ "${snapstart_enabled}" -eq 1 ] && [ "${MODEL_LAMBDA_PROVISIONED_CONCURRENCY}" -gt 0 ]; then
+  echo "SnapStart and provisioned concurrency cannot both be enabled. Set MODEL_LAMBDA_SNAPSTART=0 for a provisioned deployment." >&2
+  exit 1
+fi
 
 case "${MODEL_LAMBDA_ARCHITECTURE}" in
   x86_64 | amd64)
@@ -40,7 +56,7 @@ echo "Building and pushing serverless model image ${image_uri}"
 aws ecr describe-repositories --repository-names "${MODEL_ECR_REPOSITORY_NAME}" >/dev/null 2>&1 \
   || aws ecr create-repository --repository-name "${MODEL_ECR_REPOSITORY_NAME}" >/dev/null
 
-lifecycle_policy='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 3 days","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":3},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 20 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}'
+lifecycle_policy='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 1 day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 2 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":2},"action":{"type":"expire"}}]}'
 aws ecr put-lifecycle-policy \
   --repository-name "${MODEL_ECR_REPOSITORY_NAME}" \
   --lifecycle-policy-text "${lifecycle_policy}" >/dev/null
