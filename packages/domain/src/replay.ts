@@ -11,6 +11,7 @@ import {
   estimateStrikeZoneForPitch,
 } from "./state";
 import { pitchEventSchema } from "./validation";
+import { sameJsonValue } from "./json-equality";
 import type {
   GameReplay,
   GameSummary,
@@ -247,7 +248,12 @@ function isCompleteAtBat(pitches: PitchEvent[]): boolean {
       pitch.paId !== first.paId ||
       pitch.gamePitchIndex !== first.gamePitchIndex + index ||
       pitch.pitchNumber !== index + 1 ||
-      JSON.stringify(pitch.matchup) !== JSON.stringify(first.matchup)
+      pitch.matchup.pitcherId !== first.matchup.pitcherId ||
+      pitch.matchup.pitcherName !== first.matchup.pitcherName ||
+      pitch.matchup.pitcherHand !== first.matchup.pitcherHand ||
+      pitch.matchup.batterId !== first.matchup.batterId ||
+      pitch.matchup.batterName !== first.matchup.batterName ||
+      pitch.matchup.batterSide !== first.matchup.batterSide
     )
       return false;
     const outcome = applyPitchResult(pitch.preState, pitch.result);
@@ -256,8 +262,8 @@ function isCompleteAtBat(pitches: PitchEvent[]): boolean {
     const next = pitches[index + 1];
     return (
       !next ||
-      JSON.stringify(next.preState.count) ===
-        JSON.stringify(outcome.postState.count)
+      (next.preState.count.balls === outcome.postState.count.balls &&
+        next.preState.count.strikes === outcome.postState.count.strikes)
     );
   });
 }
@@ -320,8 +326,10 @@ export function assertEdition(edition: ReplayEdition): void {
       gameDate: edition.game.officialDate,
     });
     if (
-      JSON.stringify(predictionRequestSchema.parse(item.request)) !==
-      JSON.stringify(predictionRequestSchema.parse(expected))
+      !sameJsonValue(
+        predictionRequestSchema.parse(item.request),
+        predictionRequestSchema.parse(expected),
+      )
     )
       throw new Error(
         "Prediction context contains future or mismatched pitch data.",

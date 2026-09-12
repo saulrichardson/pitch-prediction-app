@@ -144,4 +144,33 @@ describe("prepared replay navigation", () => {
       expect(() => assertEdition(copy)).toThrow();
     }
   });
+  it("accepts a complete edition after storage reorders object fields", () => {
+    const persisted = JSON.parse(JSON.stringify(edition)) as ReplayEdition;
+    persisted.pitches.forEach((item, index) => {
+      for (const pitch of [item.actual, ...item.request.pitcherSessionHistory])
+        pitch.shape.release = { x: 1, z: 2 };
+      for (const pitch of item.request.currentPaHistory)
+        pitch.shape.release = { z: 2, x: 1 };
+      const { balls, strikes } = item.actual.preState.count;
+      item.actual.preState.count = { strikes, balls };
+      if (index % 2) {
+        const matchup = item.actual.matchup;
+        item.actual.matchup = {
+          batterSide: matchup.batterSide,
+          batterName: matchup.batterName,
+          batterId: matchup.batterId,
+          pitcherHand: matchup.pitcherHand,
+          pitcherName: matchup.pitcherName,
+          pitcherId: matchup.pitcherId,
+        };
+      }
+    });
+    expect(() => assertEdition(persisted)).not.toThrow();
+    expect(
+      selectFeaturedAtBat({
+        game: persisted.game,
+        pitches: persisted.pitches.map((item) => item.actual),
+      }),
+    ).toHaveLength(4);
+  });
 });
