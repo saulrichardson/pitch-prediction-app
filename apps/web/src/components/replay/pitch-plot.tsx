@@ -24,24 +24,6 @@ export function PitchPlot({
         role="img"
         aria-label={`Strike zone from the catcher's view. Forecast: ${forecast.label}.${actual ? ` Actual: ${actual.label}.` : ""}${note ? ` ${note}.` : ""}`}
       >
-        <defs>
-          <pattern
-            id="plot-grid"
-            width="22"
-            height="22"
-            patternUnits="userSpaceOnUse"
-          >
-            <circle cx="1" cy="1" r="0.7" className="plot-grid-dot" />
-          </pattern>
-        </defs>
-        <rect
-          x="10"
-          y="5"
-          width="300"
-          height="295"
-          rx="20"
-          fill="url(#plot-grid)"
-        />
         <rect
           x={x(-17 / 24)}
           y={y(zone.top)}
@@ -118,8 +100,8 @@ export function PitchPlot({
           <i className="actual-key" />
           Actual
         </span>
-        <small>Catcher’s view</small>
       </div>
+      <p className="plot-caption">Catcher’s view</p>
       {note ? <p className="plot-missing">{note}</p> : null}
     </div>
   );

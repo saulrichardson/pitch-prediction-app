@@ -6,9 +6,8 @@ import {
   LoaderCircle,
   RotateCcw,
   CircleAlert,
-  Check,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   resultLabel,
   type BaseState,
@@ -51,13 +50,14 @@ export default function PitchPredictionApp() {
   }, [replay, app]);
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${replay ? " has-replay" : ""}`}>
       <nav className="masthead" aria-label="App">
         <div className="wordmark">
-          <span className="brand-mark" aria-hidden="true">
-            P
-          </span>
-          Pitch<span className="wordmark-sub">/ Replay</span>
+          <svg className="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
+            <path d="M6 4h16v14l-8 6-8-6Z" />
+            <circle cx="14" cy="12" r="3" />
+          </svg>
+          Pitch<span className="wordmark-sub">Replay</span>
         </div>
         <div className="masthead-actions">
           <button
@@ -116,17 +116,36 @@ export default function PitchPredictionApp() {
           <Scoreboard replay={replay} />
           <div className="replay-heading">
             <div>
-              <p className="eyebrow">The matchup</p>
+              <p className="eyebrow">At the plate</p>
               <h1>
                 <span>{replay.current.matchup.pitcherName}</span>
                 <span className="versus">to</span>
                 <span>{replay.current.matchup.batterName}</span>
               </h1>
             </div>
-            <span className="pitch-progress">
-              Pitch <strong>{replay.index + 1}</strong>
-              <span> / {replay.edition.pitchCount}</span>
-            </span>
+            <div className="pitch-progress">
+              <span>
+                Pitch <strong>{replay.index + 1}</strong> /{" "}
+                {replay.edition.pitchCount}
+              </span>
+              <div className="pitch-steps" aria-hidden="true">
+                {Array.from(
+                  { length: replay.edition.pitchCount },
+                  (_, index) => (
+                    <i
+                      key={index}
+                      className={
+                        index === replay.index
+                          ? "current"
+                          : index < replay.index
+                            ? "past"
+                            : ""
+                      }
+                    />
+                  ),
+                )}
+              </div>
+            </div>
           </div>
           <section
             className="replay-stage"
@@ -150,9 +169,7 @@ export default function PitchPredictionApp() {
               {app.notice ? (
                 <span className="connection-notice">{app.notice}</span>
               ) : replay.phase === "complete" ? (
-                <span>
-                  <Check size={15} /> At-bat complete
-                </span>
+                <span className="sr-only">At-bat complete</span>
               ) : (
                 <span className="sr-only">
                   {replay.phase === "forecast"
@@ -207,7 +224,7 @@ export default function PitchPredictionApp() {
           {replay.summary ? (
             <section className="replay-summary" aria-label="At-bat summary">
               <div>
-                <p className="eyebrow">The final read</p>
+                <p className="eyebrow">At-bat complete</p>
                 <h2>{replay.summary.outcome}</h2>
               </div>
               <p>
@@ -227,7 +244,7 @@ export default function PitchPredictionApp() {
           <Details replay={replay} />
           <footer className="replay-footer">
             <span>
-              MLB replay · {gameDate(replay.edition.game.officialDate)}
+              {gameDate(replay.edition.game.officialDate)} · MLB replay
             </span>
             <span className="keyboard-hint">
               ← Back <span>·</span> → Continue
@@ -240,8 +257,31 @@ export default function PitchPredictionApp() {
 }
 
 function About() {
+  const details = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismissOutside = (event: PointerEvent) => {
+      if (
+        details.current?.open &&
+        event.target instanceof Node &&
+        !details.current.contains(event.target)
+      )
+        details.current.open = false;
+    };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && details.current?.open) {
+        details.current.open = false;
+        details.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissEscape);
+    };
+  }, []);
   return (
-    <details className="about">
+    <details className="about" ref={details}>
       <summary>
         About <ChevronDown size={13} />
       </summary>
@@ -287,15 +327,38 @@ function Intro({
       <div className="intro-copy">
         <p className="eyebrow">Baseball, one pitch ahead</p>
         <h1>
-          Every pitch.
+          One pitch
           <br />
-          <span>A new read.</span>
+          <span>at a time.</span>
         </h1>
         <p className="intro-description">
-          See what the model expects.
-          <br />
-          Reveal what actually happened.
+          Read the forecast. Reveal the pitch.
         </p>
+      </div>
+      <div className="featured-replay">
+        <div className="featured-meta">
+          <span className="eyebrow">Featured replay</span>
+          <span>{gameDate(edition.game.officialDate)}</span>
+        </div>
+        <div className="featured-teams">
+          {edition.game.label.split(" @ ").map((team, index) => (
+            <span key={team}>
+              {index > 0 ? <small>at</small> : null}
+              {team}
+            </span>
+          ))}
+        </div>
+        <div className="featured-matchup">
+          <span>{edition.matchup.pitcherName}</span>
+          <small>pitching to</small>
+          <span>{edition.matchup.batterName}</span>
+        </div>
+        <div className="featured-bottom">
+          <span>
+            {edition.half === "top" ? "Top" : "Bottom"} {edition.inning}
+          </span>
+          <span>{edition.pitchCount} pitches</span>
+        </div>
         <button
           className="button primary intro-start"
           onClick={onStart}
@@ -317,65 +380,6 @@ function Intro({
             {notice}
           </p>
         ) : null}
-      </div>
-      <div className="featured-card">
-        <div className="featured-meta">
-          <span className="eyebrow">Featured at-bat</span>
-          <span>{gameDate(edition.game.officialDate)}</span>
-        </div>
-        <div className="featured-teams">
-          {edition.game.label.replace(" @ ", " / ")}
-        </div>
-        <div className="field-art" aria-hidden="true">
-          <svg viewBox="0 0 300 200">
-            <path
-              d="M150 190 L20 60 Q150 -55 280 60 Z"
-              className="field-outfield"
-            />
-            <path
-              d="M150 175 L70 95 L150 15 L230 95 Z"
-              className="field-infield"
-            />
-            <path
-              d="M150 175 L102 127 L150 79 L198 127 Z"
-              className="field-basepath"
-            />
-            <circle cx="150" cy="127" r="5" />
-            <rect
-              x="146"
-              y="75"
-              width="8"
-              height="8"
-              transform="rotate(45 150 79)"
-            />
-            <rect
-              x="98"
-              y="123"
-              width="8"
-              height="8"
-              transform="rotate(45 102 127)"
-            />
-            <rect
-              x="194"
-              y="123"
-              width="8"
-              height="8"
-              transform="rotate(45 198 127)"
-            />
-            <path d="M145 172 H155 V178 L150 183 L145 178 Z" />
-          </svg>
-        </div>
-        <div className="featured-matchup">
-          <span>{edition.matchup.pitcherName}</span>
-          <small>pitching to</small>
-          <span>{edition.matchup.batterName}</span>
-        </div>
-        <div className="featured-bottom">
-          <span>
-            {edition.half === "top" ? "Top" : "Bottom"} {edition.inning}
-          </span>
-          <span>{edition.pitchCount} pitches · Complete replay</span>
-        </div>
       </div>
     </section>
   );
@@ -423,7 +427,11 @@ function Scoreboard({ replay }: { replay: ReplayView }) {
           {state.half === "top" ? "↑" : "↓"} {state.inning}
           <span className="sr-only"> {state.half}</span>
         </span>
-        <span className="count" data-testid="count">
+        <span
+          className="count"
+          data-testid="count"
+          aria-label={`${state.count.balls} balls, ${state.count.strikes} strikes`}
+        >
           {state.count.balls}–{state.count.strikes}
         </span>
         <span className="outs" aria-label={`${state.outs} outs`}>
@@ -451,7 +459,7 @@ function Forecast({ replay }: { replay: ReplayView }) {
       <h2>{pitchName(top.label)}</h2>
       <div className="forecast-probability">
         {percent(top.probability)}
-        <span>pitch probability</span>
+        <span>probability</span>
       </div>
       <div className="forecast-location">
         <strong>{replay.prediction.location.expected.label}</strong>
@@ -479,14 +487,10 @@ function Actual({ replay }: { replay: ReplayView }) {
       aria-live="polite"
       aria-atomic="true"
     >
-      <div className="actual-title">
-        <p className="eyebrow">Actual pitch</p>
-        {replay.actual ? (
-          <span className="actual-status">Revealed</span>
-        ) : (
-          <span className="actual-status pending-status">Hidden</span>
-        )}
-      </div>
+      <p className="eyebrow">
+        <span className="status-dot actual-dot" />
+        Actual pitch
+      </p>
       {replay.actual ? (
         <>
           <div className="actual-main">
@@ -497,8 +501,8 @@ function Actual({ replay }: { replay: ReplayView }) {
             </strong>
           </div>
           <div className="actual-result">
-            <span>{resultLabel(replay.actual.result)}</span>
             <span>{replay.actual.location.label}</span>
+            <strong>{resultLabel(replay.actual.result)}</strong>
           </div>
           <div className="actual-evaluation">
             <span>
@@ -507,7 +511,7 @@ function Actual({ replay }: { replay: ReplayView }) {
                 : `Forecast rank ${replay.evaluation?.pitchTypeRank ? `#${replay.evaluation.pitchTypeRank}` : "—"}`}
             </span>
             <span>
-              {percent(replay.evaluation?.pitchTypeProbability ?? 0)}{" "}
+              {percent(replay.evaluation?.pitchTypeProbability ?? 0)} model
               probability
             </span>
           </div>
@@ -515,8 +519,9 @@ function Actual({ replay }: { replay: ReplayView }) {
       ) : (
         <div className="actual-hidden">
           <span className="hidden-mark" aria-hidden="true">
-            •••
+            —
           </span>
+          <p className="reveal-prompt">Reveal to compare</p>
           {last ? (
             <p>
               Last pitch: <strong>{pitchName(last.actual.pitchType)}</strong> ·{" "}

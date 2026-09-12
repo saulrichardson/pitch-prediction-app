@@ -130,3 +130,71 @@ test("an offline action can be retried after reconnection", async ({
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("button", { name: "Next pitch" })).toBeEnabled();
 });
+
+test("About dismisses with Escape or an outside action without interrupting the replay", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start replay", exact: true }).click();
+  const about = page.locator(".about summary");
+  const modelCard = page.getByRole("link", { name: "Model card" });
+  await about.click();
+  await expect(modelCard).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(modelCard).not.toBeVisible();
+  await expect(about).toBeFocused();
+  await about.click();
+  await page.getByRole("button", { name: "Reveal pitch", exact: true }).click();
+  await expect(modelCard).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Next pitch", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".pitch-progress")).toContainText("Pitch 1 / 4");
+});
+
+test("small-screen controls stay reachable through reveal, details, and completion", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "phone",
+    "The narrowest phone layout has its own interaction check.",
+  );
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start replay", exact: true }).click();
+  const reveal = page.getByRole("button", {
+    name: "Reveal pitch",
+    exact: true,
+  });
+  await expect(reveal).toBeVisible();
+  const initial = (await reveal.boundingBox())!;
+  expect(initial.x).toBeGreaterThanOrEqual(20);
+  expect(initial.x + initial.width).toBeLessThanOrEqual(300);
+  expect(initial.y + initial.height).toBeLessThanOrEqual(640);
+  for (let index = 0; index < 4; index++) {
+    await reveal.click();
+    const next = page.getByRole("button", {
+      name: index === 3 ? "Replay again" : "Next pitch",
+      exact: true,
+    });
+    await expect(next).toBeEnabled();
+    expect(Math.abs((await next.boundingBox())!.y - initial.y)).toBeLessThan(2);
+    if (index === 0) {
+      await page.getByText("Explore the forecast", { exact: true }).click();
+      await page.locator(".methodology").scrollIntoViewIfNeeded();
+      expect(Math.abs((await next.boundingBox())!.y - initial.y)).toBeLessThan(
+        2,
+      );
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.getByText("Explore the forecast", { exact: true }).click();
+    }
+    if (index < 3) await next.click();
+  }
+  await page.getByRole("button", { name: "Replay again", exact: true }).click();
+  await expect(reveal).toBeEnabled();
+  expect(Math.abs((await reveal.boundingBox())!.y - initial.y)).toBeLessThan(2);
+});

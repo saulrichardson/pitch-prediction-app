@@ -200,22 +200,20 @@ export function GameBrowser({
 
   return (
     <section className="game-browser" aria-label="Game browser">
-      <button
-        className="text-button catalog-return"
-        onClick={onReturn}
-        disabled={busy}
-      >
-        <ArrowLeft size={15} /> Return to replay
-      </button>
       <div className="catalog-heading">
         <div>
-          <p className="eyebrow">Major League Baseball</p>
+          <p className="eyebrow">This week in baseball</p>
           <h1>Choose a game.</h1>
+          <p>One at-bat. Any team.</p>
         </div>
-        <p>
-          One complete at-bat.
-          <br /> Any team. The last seven days.
-        </p>
+        <button
+          className="text-button catalog-return"
+          onClick={onReturn}
+          disabled={busy}
+          aria-label="Return to replay"
+        >
+          <ArrowLeft size={15} /> Replay
+        </button>
       </div>
       {catalog ? (
         <div className="date-strip" role="group" aria-label="Game date">
@@ -352,8 +350,8 @@ export function GameBrowser({
         <h2>{selectedDate ? dateLabel(selectedDate, "full") : "Games"}</h2>
         {catalog && !loading ? (
           <span>
-            {catalog.games.filter((game) => game.status === "complete").length}{" "}
-            completed
+            {catalog.games.length}{" "}
+            {catalog.games.length === 1 ? "game" : "games"}
           </span>
         ) : null}
       </div>
@@ -408,13 +406,13 @@ export function GameBrowser({
                 }
               >
                 <span className="game-teams">
-                  <span>
+                  <span className="game-abbreviations">
                     <b>{game.away.abbreviation}</b>
-                    <span>{game.away.name}</span>
-                  </span>
-                  <span>
+                    <small>at</small>
                     <b>{game.home.abbreviation}</b>
-                    <span>{game.home.name}</span>
+                  </span>
+                  <span className="game-team-names">
+                    {game.away.name} <span>at</span> {game.home.name}
                   </span>
                 </span>
                 <span className="game-row-detail">

@@ -47,15 +47,25 @@ request has one retry action and preserves the last acknowledged view.
 
 - The matchup and count provide context; the forecast and actual comparison are
   the focal point.
-- One primary action stays in a stable location. Phone controls stay reachable.
+- One primary action stays in a stable location. The phone toolbar stays at the
+  bottom edge through reveal, scrolling, and completion; content has room to
+  scroll clear of it.
 - A shared strike zone makes differences visible. Forecast and actual keep
   distinct colors and the same coordinate frame.
 - Secondary distributions and methodology are available on demand.
 - Copy names the next action or the current problem. Routine infrastructure,
   caveats, repeated readiness assurances, and invented confidence labels do not
   occupy the main experience.
-- Use the navy/orange baseball identity with restrained typography, spacing,
-  contrast, and support for light, dark, and reduced-motion preferences.
+- Use a refined scorecard: warm paper and charcoal surfaces, a muted green
+  forecast, and a clay accent for the actual pitch and primary action. Condensed
+  display type carries pitch names and team abbreviations; body type carries
+  supporting facts. Open space and fine rules establish hierarchy.
+- Forecast and actual occupy parallel columns with a shared plot between them
+  on larger screens and below them on phones. Keep the comparison readable at
+  320 pixels. Respect light, dark, and reduced-motion preferences.
+- Attach the opening action to its featured matchup. Keep the week and game
+  rows scannable, with explicit preparation and availability labels. Extra copy
+  and decorative surfaces must earn their place by helping the next decision.
 
 ## Prediction Integrity
 
