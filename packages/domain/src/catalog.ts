@@ -1,8 +1,10 @@
 import { z } from "zod";
 import type { EditionSummary } from "./replay";
+import { gameDateSchema } from "./browser-contracts";
+
+export { gameDateSchema } from "./browser-contracts";
 
 export const gameIdSchema = z.string().regex(/^\d{1,10}$/);
-export const gameDateSchema = z.iso.date();
 export const catalogDays = 7;
 
 /** MLB's official game dates follow the US baseball day, not the server's UTC day. */

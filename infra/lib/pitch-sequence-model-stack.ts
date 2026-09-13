@@ -40,6 +40,9 @@ export class PitchSequenceModelStack extends cdk.Stack {
       memorySize: modelMemoryMb,
       timeout: cdk.Duration.seconds(modelTimeoutSeconds),
       reservedConcurrentExecutions: modelReservedConcurrency,
+      // Preparation jobs pin a version across invocations and retries. Retire
+      // old versions only after checking that no resumable job still uses them.
+      currentVersionOptions: { removalPolicy: cdk.RemovalPolicy.RETAIN },
       ephemeralStorageSize: cdk.Size.mebibytes(512),
       logGroup: modelLogGroup,
       environment: {

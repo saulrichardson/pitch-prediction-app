@@ -1,8 +1,5 @@
-import {
-  commandSchema,
-  type ReplayCommand,
-  type ReplayView,
-} from "@pitch/domain";
+import type { ReplayCommand, ReplayView } from "@pitch/domain";
+import { commandSchema } from "@pitch/domain/browser-contracts";
 
 export type PendingCommand = { replayId: string; command: ReplayCommand };
 

@@ -24,6 +24,7 @@
     "prepare:replay": "node --import tsx scripts/prepare-replay.ts",
     "fixture:replay": "node --import tsx scripts/write-test-edition.ts",
     "verify:local": "node scripts/verify-local.mjs",
+    "verify:static": "node scripts/verify-static-release.mjs",
     "publish:replay": "node --import tsx scripts/publish-replay.ts"
   },
   "engines": {

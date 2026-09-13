@@ -35,6 +35,7 @@ function client() {
       payload,
       ms: performance.now() - started,
       cache: response.headers.get("cache-control"),
+      setsCookie: setCookie.length > 0,
     };
   };
 }
@@ -80,17 +81,25 @@ await check("readiness requires a complete published replay", async () => {
   const ready = await owner("/ready");
   assert.equal(ready.status, 200, JSON.stringify(ready.payload));
   assert.ok(ready.payload.editionId);
-  edition = (await owner("/api/replays")).payload.edition;
+  const featured = await owner("/api/replays");
+  edition = featured.payload.edition;
   assert.ok(edition.pitchCount >= 3 && edition.pitchCount <= 8);
+  assert.equal(featured.cache, "public, max-age=0, s-maxage=30");
+  assert.equal(featured.setsCookie, false);
+  assert.deepEqual((await stranger("/api/replays")).payload, featured.payload);
+  assert.equal("pitches" in edition, false);
+  assert.equal("awayScore" in edition.game, false);
 });
 await check(
   "start is idempotent and actual pitch facts stay hidden",
   async () => {
     const opened = await owner("/api/replays", { editionId: edition.id });
     assert.equal(opened.status, 200, JSON.stringify(opened.payload));
+    assert.equal(opened.cache, "no-store");
     replay = opened.payload.replay;
     hidden(replay);
     assert.equal(replay.step, 0);
+    assert.equal((await owner(commands())).cache, "no-store");
     assert.deepEqual(
       (await owner("/api/replays", { editionId: edition.id })).payload.replay,
       replay,

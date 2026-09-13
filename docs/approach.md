@@ -6,8 +6,9 @@
 - Python/FastAPI, Pydantic, and the real pitchpredict xLSTM model.
 - DynamoDB for deployed state; PostgreSQL when explicitly selected; memory for
   local development only.
-- CloudFront with origin access control, a Lambda Web Adapter web container,
-  and a separate model Lambda container managed by AWS CDK.
+- CloudFront with origin access control, private S3 delivery for the static
+  interface, a Lambda Web Adapter API container, and a separate model Lambda
+  container managed by AWS CDK.
 - Signed anonymous workspace cookies; no user-account service.
 - Vitest, pytest, HTTP smoke checks, Playwright, type checks, ESLint, and builds.
 
@@ -23,7 +24,8 @@ operator + completed MLB game
   -> conditionally publish the featured-edition pointer
 
 browser
-  -> CloudFront / web route
+  -> CloudFront / private S3 static document and assets
+  -> CloudFront / web API route
   -> signed workspace session
   -> authoritative session read + immutable edition read
   -> pure cursor transition
@@ -54,6 +56,9 @@ process-cache persistence are absent from the active path.
   schedule projection. `packages/workflows/src/catalog.ts` owns discovery and
   durable requests; `game-preparation.ts` owns worker state transitions.
 - `infra/functions/prepare-game.ts` binds the stream and immutable model client.
+- `packages/domain/src/browser-contracts.ts` owns the small strict date and
+  command schemas shared by browser and server. Client runtime imports use
+  explicit package subpaths to avoid bundling server-side edition validation.
 - `packages/db/src/storage/` implements the same read/conditional-write contract
   for memory, DynamoDB, and PostgreSQL.
 - `apps/web/src/components/replay/` owns interaction, recovery, formatting, and
@@ -79,7 +84,9 @@ process-cache persistence are absent from the active path.
    actuals. Final scores, requests, and future actual pitches stay server-side.
 7. POST origin checks use the viewer host set by the CloudFront viewer-request
    function. It replaces any supplied `x-forwarded-host` before origin forwarding.
-8. Every replay response is `no-store`. Browser requests have a finite timeout;
+8. Every private replay response is `no-store`. The public, session-free featured
+   summary GET at `/api/replays` alone allows 30 seconds of shared caching.
+   Browser requests have a finite timeout;
    unacknowledged commands survive refresh and reuse the original UUID on retry.
 9. Publication requires valid distributions, one model version, matching
    pre-pitch inputs, ordered historical context, and a 256 KB edition size limit.
@@ -139,6 +146,23 @@ monitoring controls, not a hard billing cap. Model SnapStart/checkpoint packagin
 remain the existing operating model and require actual AWS verification on
 release.
 
+The web release script creates the retained private asset bucket, extracts the
+prerendered document and assets from the exact container, uploads them, then
+updates CloudFront. A viewer-request function selects the immutable release
+document and favicon; hashed scripts, styles, and fonts go directly to S3.
+Old hashes stay available for open tabs and rollback. Private APIs bypass the
+CDN cache; the public summary's cache has zero minimum/default TTL so failures
+and mutations cannot become shared responses.
+
+The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each
+prediction. It evaluates the prefix once, then one new token at a time using
+the same upstream chunk kernel, weights, grammar, and eight samples. No state
+crosses requests. Kernel parity tests and seeded checkpoint comparisons gate
+upgrades. Model versions are retained during release so in-flight preparation
+can finish; retire an old snapshot only after checking resumable job references.
+The [performance record](records/2026-09-13-performance.md) covers evidence,
+cache boundaries, release order, and the remaining budget choice.
+
 The schedule cache lasts two minutes. Each date's small edition index lets the
 picker avoid reading every prediction payload. The selected job is polled every
 2.5 seconds while active. A ten-minute stale state exposes recovery; saved model
@@ -158,6 +182,7 @@ npm test
 npm run test:model
 npm run lint
 npm run build
+npm run verify:static
 npm run infra:synth
 npm run verify:local
 npm run verify:catalog

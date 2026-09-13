@@ -8,12 +8,8 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import {
-  resultLabel,
-  type BaseState,
-  type EditionSummary,
-  type ReplayView,
-} from "@pitch/domain";
+import type { BaseState, EditionSummary, ReplayView } from "@pitch/domain";
+import { resultLabel } from "@pitch/domain/state";
 import { useReplay } from "./replay/use-replay";
 import { PitchPlot } from "./replay/pitch-plot";
 import { gameDate, percent, pitchName, ranked } from "./replay/format";

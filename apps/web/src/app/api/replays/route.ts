@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NextResponse } from "next/server";
 import { getReplayService } from "@/lib/replay-service";
 import {
   badRequest,
@@ -11,7 +12,12 @@ import { withSession } from "@/lib/route-params";
 
 export async function GET() {
   try {
-    return ok({ edition: await (await getReplayService()).featured() });
+    // This summary is public and contains no cursor, actuals, or session data.
+    // Private replay reads and every mutation continue to use no-store.
+    return NextResponse.json(
+      { edition: await (await getReplayService()).featured() },
+      { headers: { "cache-control": "public, max-age=0, s-maxage=30" } },
+    );
   } catch (error) {
     return serverError(error);
   }

@@ -67,10 +67,13 @@ aws ecr get-login-password --region "${AWS_REGION}" \
 docker buildx build \
   --platform "${docker_platform}" \
   --provenance=false \
+  --sbom=false \
   -f services/model-api/Dockerfile.lambda \
   -t "${image_uri}" \
-  --push \
+  --load \
   services/model-api
+
+docker push "${image_uri}"
 
 echo "Deploying PitchSequenceModelStack for ${MODEL_LAMBDA_FUNCTION_NAME}:${MODEL_LAMBDA_ALIAS}"
 npm --workspace @pitch/infra run deploy:model

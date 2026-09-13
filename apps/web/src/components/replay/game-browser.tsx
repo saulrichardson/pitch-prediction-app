@@ -1,12 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, LoaderCircle } from "lucide-react";
-import {
-  gameDateSchema,
-  type CatalogGame,
-  type GameAvailability,
-  type GameCatalog,
-} from "@pitch/domain";
+import type { CatalogGame, GameAvailability, GameCatalog } from "@pitch/domain";
+import { gameDateSchema } from "@pitch/domain/browser-contracts";
 import { ReplayApiError, requestJson } from "./api";
 import { teamById } from "./mlb-identity";
 import { TeamMark } from "./mlb-media";

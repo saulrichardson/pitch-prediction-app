@@ -21,6 +21,6 @@ class XlstmPredictionClient:
 
 
 def build_xlstm_client() -> XlstmPredictionClient:
-    from pitchpredict.backend.algs.xlstm import XlstmAlgorithm
+    from .incremental_xlstm import IncrementalXlstmAlgorithm
 
-    return XlstmPredictionClient(XlstmAlgorithm(name="xlstm"))
+    return XlstmPredictionClient(IncrementalXlstmAlgorithm(name="xlstm"))

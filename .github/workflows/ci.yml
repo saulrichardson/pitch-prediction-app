@@ -39,6 +39,7 @@ jobs:
       - run: npm run test:model
       - run: npm run lint
       - run: npm run build
+      - run: npm run verify:static
       - run: npm run verify:local
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

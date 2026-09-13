@@ -11,7 +11,9 @@ import * as lambdaNode from "aws-cdk-lib/aws-lambda-nodejs";
 import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import path from "node:path";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
+import { webAssetsBucketName } from "./web-assets-stack";
 
 export class PitchSequenceServerlessStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -24,6 +26,10 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       process.env.IMAGE_TAG ??
       "serverless-latest";
     const webMemoryMb = Number(process.env.SERVERLESS_WEB_MEMORY_MB ?? "2048");
+    if (!/^[A-Za-z0-9._-]+$/.test(webImageTag))
+      throw new Error(
+        "The web release tag must be a valid asset path segment.",
+      );
     const webTimeoutSeconds = Number(
       process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "30",
     );
@@ -202,6 +208,22 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const functionOriginRequestPolicy =
       cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER;
 
+    const assetsBucket = s3.Bucket.fromBucketName(
+      this,
+      "WebAssets",
+      webAssetsBucketName(this),
+    );
+    const assetsOrigin =
+      origins.S3BucketOrigin.withOriginAccessControl(assetsBucket);
+    const releaseDocument = new cloudfront.Function(this, "ReleaseDocument", {
+      code: cloudfront.FunctionCode.fromInline(`function handler(event) {
+        var request = event.request;
+        request.uri = ${JSON.stringify(`/releases/${webImageTag}`)} +
+          (request.uri === '/' ? '/index.html' : request.uri);
+        return request;
+      }`),
+    });
+
     const forwardViewerHost = new cloudfront.Function(
       this,
       "ForwardViewerHost",
@@ -232,11 +254,65 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       additionalBehaviors: {
+        "/": {
+          origin: assetsOrigin,
+          functionAssociations: [
+            {
+              function: releaseDocument,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy:
+            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
         "/_next/static/*": {
-          origin: functionOrigin,
+          origin: assetsOrigin,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy:
+            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+        "/favicon.svg": {
+          origin: assetsOrigin,
+          functionAssociations: [
+            {
+              function: releaseDocument,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          responseHeadersPolicy:
+            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+        "/api/replays": {
+          origin: functionOrigin,
+          functionAssociations: [
+            {
+              function: forwardViewerHost,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+          // Only the public GET summary opts in via s-maxage. A zero minimum
+          // and default TTL preserve no-store on mutations and failures.
+          cachePolicy: new cloudfront.CachePolicy(this, "PublicSummaryCache", {
+            minTtl: cdk.Duration.seconds(0),
+            defaultTtl: cdk.Duration.seconds(0),
+            maxTtl: cdk.Duration.seconds(30),
+            enableAcceptEncodingGzip: true,
+            enableAcceptEncodingBrotli: true,
+          }),
           originRequestPolicy: functionOriginRequestPolicy,
           responseHeadersPolicy:
             cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,

@@ -12,6 +12,9 @@ import {
 } from "./state";
 import { pitchEventSchema } from "./validation";
 import { sameJsonValue } from "./json-equality";
+import type { ReplayCommand } from "./browser-contracts";
+
+export { commandSchema, type ReplayCommand } from "./browser-contracts";
 import type {
   GameReplay,
   GameSummary,
@@ -38,14 +41,6 @@ export type ReplayEdition = {
   }>;
 };
 
-export const commandSchema = z
-  .object({
-    id: z.uuid(),
-    expectedRevision: z.number().int().nonnegative(),
-    action: z.enum(["reveal", "next", "back", "restart"]),
-  })
-  .strict();
-export type ReplayCommand = z.infer<typeof commandSchema>;
 export type ReplaySession = {
   id: string;
   workspaceId: string;

@@ -52,6 +52,34 @@ docker buildx build \
 docker push "${image_uri}"
 docker push "${latest_uri}"
 
+# Publish the exact container's prerendered document and hashed assets first.
+# The distribution switches its document URI only after every upload succeeds.
+# Old hashes and documents remain available to open tabs and rollback releases.
+assets_dir="$(mktemp -d)"
+assets_container="$(docker create "${image_uri}")"
+trap 'docker rm "${assets_container}" >/dev/null 2>&1 || true; rm -rf "${assets_dir}"' EXIT
+docker cp "${assets_container}:/app/apps/web/.next/static" "${assets_dir}/static"
+docker cp "${assets_container}:/app/apps/web/.next/server/app/index.html" "${assets_dir}/index.html"
+docker cp "${assets_container}:/app/apps/web/public/favicon.svg" "${assets_dir}/favicon.svg"
+test -s "${assets_dir}/index.html"
+
+distribution_id="$(aws cloudformation describe-stack-resources --stack-name PitchSequenceServerlessStack \
+  --query "StackResources[?ResourceType=='AWS::CloudFront::Distribution'].PhysicalResourceId | [0]" --output text)"
+test -n "${distribution_id}" && test "${distribution_id}" != "None"
+# Authorize this existing distribution before its new origin starts serving.
+npm --workspace @pitch/infra run deploy:assets -- --parameters "DistributionId=${distribution_id}"
+assets_bucket="$(aws cloudformation describe-stacks --stack-name PitchReplayWebAssetsStack \
+  --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue | [0]" --output text)"
+test -n "${assets_bucket}" && test "${assets_bucket}" != "None"
+aws s3 sync "${assets_dir}/static/" "s3://${assets_bucket}/_next/static/" \
+  --cache-control 'public,max-age=31536000,immutable' --only-show-errors
+aws s3 cp "${assets_dir}/index.html" "s3://${assets_bucket}/releases/${SERVERLESS_WEB_IMAGE_TAG}/index.html" \
+  --content-type 'text/html; charset=utf-8' \
+  --cache-control 'public,max-age=0,s-maxage=31536000' --only-show-errors
+aws s3 cp "${assets_dir}/favicon.svg" "s3://${assets_bucket}/releases/${SERVERLESS_WEB_IMAGE_TAG}/favicon.svg" \
+  --content-type 'image/svg+xml' \
+  --cache-control 'public,max-age=0,s-maxage=31536000' --only-show-errors
+
 echo "Deploying PitchSequenceServerlessStack with image ${SERVERLESS_WEB_IMAGE_TAG}"
 npm --workspace @pitch/infra run deploy:serverless
 
