@@ -179,5 +179,8 @@ describe("prepared replay web infrastructure", () => {
       DeletionPolicy: "Retain",
       UpdateReplacePolicy: "Retain",
     });
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      Environment: { Variables: { OMP_NUM_THREADS: "1", MKL_NUM_THREADS: "1" } },
+    });
   });
 });

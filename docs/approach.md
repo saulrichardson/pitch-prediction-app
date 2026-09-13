@@ -157,7 +157,8 @@ and mutations cannot become shared responses.
 The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each
 prediction. It evaluates the prefix once, then one new token at a time using
 the same upstream chunk kernel, weights, grammar, and eight samples. No state
-crosses requests. Kernel parity tests and seeded checkpoint comparisons gate
+crosses requests. OpenMP/MKL use one compute thread at the 1 GB Lambda allocation,
+which measured faster than the default thread pool. Kernel parity tests and seeded checkpoint comparisons gate
 upgrades. Model versions are retained during release so in-flight preparation
 can finish; retire an old snapshot only after checking resumable job references.
 The [performance record](records/2026-09-13-performance.md) covers evidence,

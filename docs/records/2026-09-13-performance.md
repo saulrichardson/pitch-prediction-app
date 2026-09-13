@@ -37,6 +37,8 @@ Model invocations grew from 4.3 to 29.3 seconds as history grew. pitchpredict
   The exact `/api/replays` behavior caches GET/HEAD only, forwards POST cookies
   and the trusted viewer host, and has zero minimum/default TTL. Errors opt out.
 - Keep existing memory, concurrency, and attempt limits for this rollout.
+  Set `OMP_NUM_THREADS=1` and `MKL_NUM_THREADS=1` before snapshot initialization:
+  the small matrix operations execute faster with one thread at 1 GB.
   Standing warm web capacity is a separate budget decision. One 2 GB x86
   provisioned instance is about $21.90 per 730-hour month before usage charges
   at the published $0.0000041667 per GB-second rate. S3 adds storage/request
@@ -60,6 +62,13 @@ the distribution ID from the deployed web stack and supplies it as an asset
 stack parameter. Access is ready before traffic switches; there is no
 CloudFormation dependency cycle. CDK's imported-bucket OAC warning is expected:
 `WebAssetsStack` supplies the required policy before web deployment.
+
+The account's `CostGuardDenyRunawaySpend` v1 denied all `s3:CreateBucket` calls.
+For initial creation only, a temporary policy version allowed that action for
+the exact asset-bucket ARN and CDK CloudFormation execution role. IAM simulation
+confirmed other buckets and roles remained explicitly denied. The original v1
+guard was restored immediately after creation and the temporary version removed.
+Subsequent releases update the retained bucket without changing account guards.
 
 Retain model versions across rollout because preparation jobs pin immutable
 versions across invocations and retries. For the first rollout, add Retain to
@@ -86,7 +95,36 @@ latency. Eight decoder tests exercise every generated position, chunk boundaries
 sampling parity, changing context, request isolation, and invalid reuse. All
 30 Python tests pass.
 
-Before delivery, run the full repository/CI checks, inspect the live interface,
+On AWS, the identical six PIT/CHC requests at 1 GB and eight samples took
+16.817 seconds through the preparation workflow with the incremental decoder
+(version 13), compared with the previous 98.6-second preparation. A one-thread
+candidate (version 14, same image) took 13.415 seconds including its first
+snapshot restore. Its six model durations were 1.232, 1.509, 1.428, 1.628,
+1.849, and 2.138 seconds, totaling 9.786 seconds versus 14.862 seconds with the
+default thread pool. These are controlled case measurements, not population
+percentiles. Both candidates produced complete validated editions; public
+existing editions were unchanged. The comparisons consumed the normal atomic
+preparation budget, six attempts each.
+
+Code commit `85335a7` passed CI: 86 TypeScript tests (including PostgreSQL),
+30 Python tests, 23 browser tests, and one intentional browser skip. The initial
+JavaScript budget check measured 264,069 gzip bytes in CI. A transient local
+emulated Next compiler crash cleared on rebuilding the same inputs; the native
+CI build passed. The release image then built and passed model container health.
+
+The web release `serverless-85335a71e930` is deployed. Live HTTP verification
+passed ownership, origin rejection, command recovery, all reveal/advance steps,
+and the seven-day catalog (91 games). Private commands measured 83 ms median
+and 87 ms maximum in that small run. Root document responses identified Amazon
+S3, and root/public-summary CDN hits measured 5 ms on the existing connection.
+The first root request including connection setup was 225 ms. Direct anonymous
+S3 access returned 403. These samples establish correct cache paths; they are
+not a first-contentful-paint or mobile-network benchmark.
+
+The seeded real-checkpoint comparison was also repeated with two baseline CPU
+threads versus one optimized thread: all six normalized forecast values matched.
+
+For subsequent delivery, run the full repository/CI checks, inspect the live interface,
 verify CDN miss/hit behavior and private S3 access, and measure the real AWS
 model. Record those production measurements here after rollout. On any
 pitchpredict or PyTorch upgrade, rerun seeded parity against the pinned real

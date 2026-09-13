@@ -52,6 +52,10 @@ export class PitchSequenceModelStack extends cdk.Stack {
         PITCHPREDICT_SAMPLE_SIZE: modelSampleSize,
         PITCHPREDICT_WARM_ON_STARTUP: "true",
         PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT: modelSnapStart ? "true" : "false",
+        // Configure before snapshot initialization; this allocation runs the
+        // small matrix operations faster with one compute thread.
+        OMP_NUM_THREADS: "1",
+        MKL_NUM_THREADS: "1",
         HOME: "/tmp",
         XDG_CACHE_HOME: "/tmp/.cache",
         HF_HOME: "/tmp/huggingface",
