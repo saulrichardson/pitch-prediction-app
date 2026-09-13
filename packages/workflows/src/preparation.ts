@@ -17,6 +17,11 @@ import {
 import type { Storage } from "@pitch/db";
 import { gameEditionKey, catalogEditionsKey } from "./job";
 
+export const preparationLimits = {
+  dailyAttempts: 60,
+  monthlyAttempts: 400,
+} as const;
+
 export class PreparationBudgetError extends Error {
   constructor(readonly retryAt: string) {
     super(
@@ -33,8 +38,9 @@ export async function preparationBudget(storage: Storage, now = new Date()) {
     days: Record<string, number>;
   }>(`preparation-budget:${month}`);
   const current = record?.value ?? { total: 0, days: {} };
-  const monthly = current.total >= 400;
-  const limited = monthly || (current.days[day] ?? 0) >= 20;
+  const monthly = current.total >= preparationLimits.monthlyAttempts;
+  const limited =
+    monthly || (current.days[day] ?? 0) >= preparationLimits.dailyAttempts;
   const reset = monthly
     ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
     : new Date(
@@ -56,7 +62,10 @@ export async function consumePreparationBudget(
       days: Record<string, number>;
     }>(key);
     const current = record?.value ?? { total: 0, days: {} };
-    if (current.total >= 400 || (current.days[day] ?? 0) >= 20)
+    if (
+      current.total >= preparationLimits.monthlyAttempts ||
+      (current.days[day] ?? 0) >= preparationLimits.dailyAttempts
+    )
       throw new PreparationBudgetError(
         (await preparationBudget(storage, now)).retryAt,
       );

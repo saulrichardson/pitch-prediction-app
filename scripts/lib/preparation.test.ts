@@ -73,7 +73,7 @@ describe("replay preparation and publication", () => {
 
   it("enforces one atomic daily and monthly model budget", async () => {
     const storage = new MemoryStorage();
-    for (let i = 0; i < 20; i++) await consumePreparationBudget(storage, now());
+    for (let i = 0; i < 60; i++) await consumePreparationBudget(storage, now());
     await expect(consumePreparationBudget(storage, now())).rejects.toThrow(
       "budget reached",
     );
@@ -81,7 +81,7 @@ describe("replay preparation and publication", () => {
       total: number;
       days: Record<string, number>;
     }>("preparation-budget:2026-09");
-    expect(record?.value).toEqual({ total: 20, days: { "2026-09-12": 20 } });
+    expect(record?.value).toEqual({ total: 60, days: { "2026-09-12": 60 } });
     await storage.write(
       {
         ...record!,
@@ -93,6 +93,29 @@ describe("replay preparation and publication", () => {
     await expect(
       consumePreparationBudget(storage, new Date("2026-09-13T00:00:00Z")),
     ).rejects.toThrow("budget reached");
+  });
+
+  it("gives the last monthly attempt to one caller even with daily headroom", async () => {
+    const storage = new MemoryStorage();
+    await storage.write(
+      {
+        key: "preparation-budget:2026-09",
+        revision: 0,
+        value: { total: 399, days: { "2026-09-12": 20 } },
+      },
+      null,
+    );
+    const results = await Promise.allSettled([
+      consumePreparationBudget(storage, now()),
+      consumePreparationBudget(storage, now()),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect((await storage.read("preparation-budget:2026-09"))?.value).toEqual({
+      total: 400,
+      days: { "2026-09-12": 21 },
+    });
   });
 
   it("keeps the featured edition intact after an invalid publication", async () => {

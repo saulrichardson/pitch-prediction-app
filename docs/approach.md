@@ -92,7 +92,7 @@ process-cache persistence are absent from the active path.
    pre-pitch inputs, ordered historical context, and a 256 KB edition size limit.
    Failed or partial preparation never changes the featured pointer.
 10. Preparation reserves one model attempt at a time in an atomic monthly
-    counter: 20 per UTC day and 400 per UTC month. Failed invocations count.
+    counter: 60 per UTC day and 400 per UTC month. Failed invocations count.
     Saved successful forecasts are reused after interruption.
 
 DynamoDB records use `REPLAY#<key>` / `RECORD`; PostgreSQL uses `replay_records`.

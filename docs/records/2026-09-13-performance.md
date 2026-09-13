@@ -36,7 +36,11 @@ Model invocations grew from 4.3 to 29.3 seconds as history grew. pitchpredict
   reads or creates a session. Every private replay response stays `no-store`.
   The exact `/api/replays` behavior caches GET/HEAD only, forwards POST cookies
   and the trusted viewer host, and has zero minimum/default TTL. Errors opt out.
-- Keep existing memory, concurrency, and attempt limits for this rollout.
+- Keep existing memory, concurrency, and the 400-attempt monthly ceiling.
+  Raise the daily cap from 20 to 60 so a busy day can prepare more games within
+  the same monthly allowance. Failed and verification attempts still count;
+  existing counters are preserved. Both admission and invocation use the same
+  explicit `preparationLimits` model and atomic counter.
   Set `OMP_NUM_THREADS=1` and `MKL_NUM_THREADS=1` before snapshot initialization:
   the small matrix operations execute faster with one thread at 1 GB.
   Standing warm web capacity is a separate budget decision. One 2 GB x86
@@ -112,7 +116,7 @@ JavaScript budget check measured 264,069 gzip bytes in CI. A transient local
 emulated Next compiler crash cleared on rebuilding the same inputs; the native
 CI build passed. The release image then built and passed model container health.
 
-The web release `serverless-85335a71e930` is deployed. Live HTTP verification
+The initial web release `serverless-85335a71e930` was deployed. Live HTTP verification
 passed ownership, origin rejection, command recovery, all reveal/advance steps,
 and the seven-day catalog (91 games). Private commands measured 83 ms median
 and 87 ms maximum in that small run. Root document responses identified Amazon
@@ -124,9 +128,18 @@ not a first-contentful-paint or mobile-network benchmark.
 The seeded real-checkpoint comparison was also repeated with two baseline CPU
 threads versus one optimized thread: all six normalized forecast values matched.
 
+The final model alias is version 15, with the same `c80b28ab` image digest,
+1 GB memory, eight samples, and one compute thread. Through the live browser,
+COL at DET (824227) prepared four forecasts and opened automatically. Its durable
+job took 8.982 seconds from creation to ready and pinned version 15. The saved
+edition is `3dd3cefda814658a2403b93a47779a40139c5b538790a9638ca0b6c503be5624`.
+After confirming every game job was complete, versions 12, 13, and 14 were
+retired. Only the active snapshot remains; previous model images and private
+rollback templates are preserved. Account cost guard v1 is restored.
+
 For subsequent delivery, run the full repository/CI checks, inspect the live interface,
 verify CDN miss/hit behavior and private S3 access, and measure the real AWS
-model. Record those production measurements here after rollout. On any
+model. Record production measurements when changing these paths. On any
 pitchpredict or PyTorch upgrade, rerun seeded parity against the pinned real
 checkpoint as well as unit tests. Performance improvements do not establish
 model calibration or accuracy across games.

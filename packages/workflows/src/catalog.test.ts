@@ -71,7 +71,7 @@ describe("catalog and preparation requests", () => {
       {
         key: "preparation-budget:2026-09",
         revision: 0,
-        value: { total: 20, days: { "2026-09-12": 20 } },
+        value: { total: 60, days: { "2026-09-12": 60 } },
       },
       null,
     );
@@ -87,6 +87,21 @@ describe("catalog and preparation requests", () => {
       (await storage.read<GamePreparationJob>(jobKey(catalogGame.gamePk)))
         ?.value.status,
     ).toBe("failed");
+  });
+
+  it("admits another game after twenty attempts within the same monthly allowance", async () => {
+    const { service, storage } = setup();
+    await storage.write(
+      {
+        key: "preparation-budget:2026-09",
+        revision: 0,
+        value: { total: 20, days: { "2026-09-12": 20 } },
+      },
+      null,
+    );
+    expect(
+      (await service.request(catalogGame.gamePk, catalogGame.date)).status,
+    ).toBe("queued");
   });
   it("lists validated saved editions without reading large prediction records or consuming inference", async () => {
     const { service, storage } = setup();

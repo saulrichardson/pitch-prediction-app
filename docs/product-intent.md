@@ -19,7 +19,7 @@ A game is prepared once and shared across users. Its first opening queues
 preparation with visible pitch progress; the user can keep browsing and return
 after a refresh. Only a complete validated edition opens the replay. Later
 openings use that edition immediately. Preparation uses the existing shared
-limit of 20 model attempts per UTC day and 400 per month. A reached limit shows
+limit of 60 model attempts per UTC day and 400 per month. A reached limit shows
 the reset time and leaves saved games available.
 Unprepared games say **Prepare replay**; saved games say **Ready**. The selected
 game's row reflects preparation progress. First-time preparation is a visible

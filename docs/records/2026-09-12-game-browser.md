@@ -38,6 +38,8 @@ IAM boundary.
 
 The public path and operator CLI share the existing 20-attempt daily and
 400-attempt monthly budget. These are UTC windows; failed attempts count.
+The [September 13 performance release](2026-09-13-performance.md) later raised
+the daily allowance to 60 while retaining the 400-attempt monthly ceiling.
 The picker shows the reset time when preparation is paused. The worker has
 reserved concurrency 1 and a 540-second timeout. A stale queued/preparing job
 becomes resumable after ten minutes; successful forecasts and model identity
