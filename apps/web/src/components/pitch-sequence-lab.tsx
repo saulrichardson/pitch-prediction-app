@@ -18,10 +18,15 @@ import { useReplay } from "./replay/use-replay";
 import { PitchPlot } from "./replay/pitch-plot";
 import { gameDate, percent, pitchName, ranked } from "./replay/format";
 import { GameBrowser } from "./replay/game-browser";
+import { matchupIdentity } from "./replay/mlb-identity";
+import { PlayerPortrait, TeamMark, teamStyle } from "./replay/mlb-media";
 
 export default function PitchPredictionApp() {
   const app = useReplay();
   const replay = app.screen.kind === "ready" ? app.screen.replay : null;
+  const identity = replay
+    ? matchupIdentity(replay.edition.game.label, replay.current.preState.half)
+    : null;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
@@ -118,9 +123,23 @@ export default function PitchPredictionApp() {
             <div>
               <p className="eyebrow">At the plate</p>
               <h1>
-                <span>{replay.current.matchup.pitcherName}</span>
+                <span className="matchup-player">
+                  <PlayerPortrait
+                    id={replay.current.matchup.pitcherId}
+                    name={replay.current.matchup.pitcherName}
+                    team={identity?.pitcher.team ?? null}
+                  />
+                  <span>{replay.current.matchup.pitcherName}</span>
+                </span>
                 <span className="versus">to</span>
-                <span>{replay.current.matchup.batterName}</span>
+                <span className="matchup-player">
+                  <PlayerPortrait
+                    id={replay.current.matchup.batterId}
+                    name={replay.current.matchup.batterName}
+                    team={identity?.batter.team ?? null}
+                  />
+                  <span>{replay.current.matchup.batterName}</span>
+                </span>
               </h1>
             </div>
             <div className="pitch-progress">
@@ -322,6 +341,11 @@ function Intro({
   notice: string | null;
   onBrowse: () => void;
 }) {
+  const identity = matchupIdentity(edition.game.label, edition.half);
+  const players = [
+    { ...identity.away, pitching: edition.half === "bottom" },
+    { ...identity.home, pitching: edition.half === "top" },
+  ];
   return (
     <section className="intro">
       <div className="intro-copy">
@@ -336,22 +360,43 @@ function Intro({
         </p>
       </div>
       <div className="featured-replay">
+        <div className="matchup-colors" aria-hidden="true">
+          <i style={teamStyle(identity.away.team)} />
+          <i style={teamStyle(identity.home.team)} />
+        </div>
         <div className="featured-meta">
           <span className="eyebrow">Featured replay</span>
           <span>{gameDate(edition.game.officialDate)}</span>
         </div>
         <div className="featured-teams">
-          {edition.game.label.split(" @ ").map((team, index) => (
-            <span key={team}>
-              {index > 0 ? <small>at</small> : null}
-              {team}
-            </span>
-          ))}
+          <span>
+            <TeamMark team={identity.away.team} />
+            {identity.away.code}
+          </span>
+          <small>at</small>
+          <span>
+            <TeamMark team={identity.home.team} />
+            {identity.home.code}
+          </span>
         </div>
         <div className="featured-matchup">
-          <span>{edition.matchup.pitcherName}</span>
-          <small>pitching to</small>
-          <span>{edition.matchup.batterName}</span>
+          {players.map(({ team, code, pitching }) => {
+            const name = pitching
+              ? edition.matchup.pitcherName
+              : edition.matchup.batterName;
+            const id = pitching
+              ? edition.matchup.pitcherId
+              : edition.matchup.batterId;
+            return (
+              <div className="featured-player" key={code}>
+                <PlayerPortrait id={id} name={name} team={team} featured />
+                <div className="player-caption">
+                  <small>{pitching ? "Pitching" : "Batting"}</small>
+                  <span>{name}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="featured-bottom">
           <span>
@@ -409,16 +454,20 @@ function Bases({ bases }: { bases: BaseState }) {
 }
 function Scoreboard({ replay }: { replay: ReplayView }) {
   const state = replay.current.preState;
-  const teams = replay.edition.game.label.split(" @ ");
+  const { away, home } = matchupIdentity(replay.edition.game.label, state.half);
   return (
     <header className="scoreboard">
       <div className="score-teams">
-        <span>
-          {teams[0]} <b>{state.awayScore}</b>
+        <span className={`score-team${away.team ? " has-logo" : ""}`}>
+          <TeamMark team={away.team} />
+          <span className="score-code">{away.code}</span>{" "}
+          <b>{state.awayScore}</b>
         </span>
         <span className="score-separator">—</span>
-        <span>
-          {teams[1]} <b>{state.homeScore}</b>
+        <span className={`score-team${home.team ? " has-logo" : ""}`}>
+          <TeamMark team={home.team} />
+          <span className="score-code">{home.code}</span>{" "}
+          <b>{state.homeScore}</b>
         </span>
         <time>{gameDate(replay.edition.game.officialDate)}</time>
       </div>

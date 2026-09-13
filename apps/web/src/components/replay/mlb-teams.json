@@ -1,0 +1,182 @@
+[
+  {
+    "id": 133,
+    "abbreviation": "ATH",
+    "name": "Athletics",
+    "color": "#003831"
+  },
+  {
+    "id": 144,
+    "abbreviation": "ATL",
+    "name": "Atlanta Braves",
+    "color": "#ba0c2f"
+  },
+  {
+    "id": 109,
+    "abbreviation": "AZ",
+    "name": "Arizona Diamondbacks",
+    "color": "#3ec1cc"
+  },
+  {
+    "id": 110,
+    "abbreviation": "BAL",
+    "name": "Baltimore Orioles",
+    "color": "#df4601"
+  },
+  {
+    "id": 111,
+    "abbreviation": "BOS",
+    "name": "Boston Red Sox",
+    "color": "#bd3039"
+  },
+  {
+    "id": 112,
+    "abbreviation": "CHC",
+    "name": "Chicago Cubs",
+    "color": "#0e3386"
+  },
+  {
+    "id": 113,
+    "abbreviation": "CIN",
+    "name": "Cincinnati Reds",
+    "color": "#c6011f"
+  },
+  {
+    "id": 114,
+    "abbreviation": "CLE",
+    "name": "Cleveland Guardians",
+    "color": "#e31937"
+  },
+  {
+    "id": 115,
+    "abbreviation": "COL",
+    "name": "Colorado Rockies",
+    "color": "#33006f"
+  },
+  {
+    "id": 145,
+    "abbreviation": "CWS",
+    "name": "Chicago White Sox",
+    "color": "#000000"
+  },
+  {
+    "id": 116,
+    "abbreviation": "DET",
+    "name": "Detroit Tigers",
+    "color": "#0a2240"
+  },
+  {
+    "id": 117,
+    "abbreviation": "HOU",
+    "name": "Houston Astros",
+    "color": "#eb6e1f"
+  },
+  {
+    "id": 118,
+    "abbreviation": "KC",
+    "name": "Kansas City Royals",
+    "color": "#0031a7"
+  },
+  {
+    "id": 108,
+    "abbreviation": "LAA",
+    "name": "Los Angeles Angels",
+    "color": "#ba0021"
+  },
+  {
+    "id": 119,
+    "abbreviation": "LAD",
+    "name": "Los Angeles Dodgers",
+    "color": "#005a9c"
+  },
+  {
+    "id": 146,
+    "abbreviation": "MIA",
+    "name": "Miami Marlins",
+    "color": "#00a3e0"
+  },
+  {
+    "id": 158,
+    "abbreviation": "MIL",
+    "name": "Milwaukee Brewers",
+    "color": "#ffc72c"
+  },
+  {
+    "id": 142,
+    "abbreviation": "MIN",
+    "name": "Minnesota Twins",
+    "color": "#d50032"
+  },
+  {
+    "id": 121,
+    "abbreviation": "NYM",
+    "name": "New York Mets",
+    "color": "#ff5910"
+  },
+  {
+    "id": 147,
+    "abbreviation": "NYY",
+    "name": "New York Yankees",
+    "color": "#132448"
+  },
+  {
+    "id": 143,
+    "abbreviation": "PHI",
+    "name": "Philadelphia Phillies",
+    "color": "#c20c31"
+  },
+  {
+    "id": 134,
+    "abbreviation": "PIT",
+    "name": "Pittsburgh Pirates",
+    "color": "#ffc72c"
+  },
+  {
+    "id": 135,
+    "abbreviation": "SD",
+    "name": "San Diego Padres",
+    "color": "#ffc425"
+  },
+  {
+    "id": 136,
+    "abbreviation": "SEA",
+    "name": "Seattle Mariners",
+    "color": "#005c5c"
+  },
+  {
+    "id": 137,
+    "abbreviation": "SF",
+    "name": "San Francisco Giants",
+    "color": "#fd5a1e"
+  },
+  {
+    "id": 138,
+    "abbreviation": "STL",
+    "name": "St. Louis Cardinals",
+    "color": "#be0a14"
+  },
+  {
+    "id": 139,
+    "abbreviation": "TB",
+    "name": "Tampa Bay Rays",
+    "color": "#8fbce6"
+  },
+  {
+    "id": 140,
+    "abbreviation": "TEX",
+    "name": "Texas Rangers",
+    "color": "#003278"
+  },
+  {
+    "id": 141,
+    "abbreviation": "TOR",
+    "name": "Toronto Blue Jays",
+    "color": "#134a8e"
+  },
+  {
+    "id": 120,
+    "abbreviation": "WSH",
+    "name": "Washington Nationals",
+    "color": "#ab0003"
+  }
+]

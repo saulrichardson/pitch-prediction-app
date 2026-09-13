@@ -61,6 +61,12 @@ request has one retry action and preserves the last acknowledged view.
   belongs to the data. Adapt accent brightness and button text to each theme.
   Condensed display type carries pitch names and team abbreviations; body type carries
   supporting facts. Open space and fine rules establish hierarchy.
+- Bring MLB identity into the matchup: official player portraits, team marks,
+  and restrained team-color accents. The feature places the away and home
+  players under their teams and names their pitching or batting role. Compact
+  portraits and logos carry that identity into the replay and game browser.
+  Team colors frame the matchup; forecast, actual, and action colors keep their
+  meaning across every game. Media loading must never gate a replay action.
 - Forecast and actual occupy parallel columns with a shared plot between them
   on larger screens and below them on phones. Keep the comparison readable at
   320 pixels. Respect light, dark, and reduced-motion preferences.

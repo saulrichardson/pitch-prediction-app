@@ -8,6 +8,8 @@ import {
   type GameCatalog,
 } from "@pitch/domain";
 import { ReplayApiError, requestJson } from "./api";
+import { teamById } from "./mlb-identity";
+import { TeamMark } from "./mlb-media";
 
 const dateLabel = (date: string, style: "short" | "full" = "short") =>
   gameDateSchema.safeParse(date).success
@@ -407,9 +409,15 @@ export function GameBrowser({
               >
                 <span className="game-teams">
                   <span className="game-abbreviations">
-                    <b>{game.away.abbreviation}</b>
+                    <span className="game-team">
+                      <TeamMark team={teamById(game.away.id)} />
+                      <b>{game.away.abbreviation}</b>
+                    </span>
                     <small>at</small>
-                    <b>{game.home.abbreviation}</b>
+                    <span className="game-team">
+                      <TeamMark team={teamById(game.home.id)} />
+                      <b>{game.home.abbreviation}</b>
+                    </span>
                   </span>
                   <span className="game-team-names">
                     {game.away.name} <span>at</span> {game.home.name}

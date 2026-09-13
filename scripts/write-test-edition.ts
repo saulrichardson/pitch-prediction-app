@@ -60,12 +60,28 @@ const yesterday = makeEdition(
 );
 function listed(edition: ReturnType<typeof fixtureEdition>): CatalogGame {
   const [away, home] = edition.game.label.split(" @ ");
+  const teamIds: Record<string, number> = {
+    NYM: 121,
+    MIA: 146,
+    SEA: 136,
+    LAD: 119,
+    BOS: 111,
+    NYY: 147,
+  };
   return {
     gamePk: edition.game.gamePk,
     date: edition.game.officialDate,
     startsAt: `${edition.game.officialDate}T23:00:00Z`,
-    away: { id: 1, name: edition.game.awayTeam, abbreviation: away },
-    home: { id: 2, name: edition.game.homeTeam, abbreviation: home },
+    away: {
+      id: teamIds[away],
+      name: edition.game.awayTeam,
+      abbreviation: away,
+    },
+    home: {
+      id: teamIds[home],
+      name: edition.game.homeTeam,
+      abbreviation: home,
+    },
     gameNumber: 1,
     doubleheader: false,
     status: "complete",

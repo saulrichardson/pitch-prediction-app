@@ -94,6 +94,15 @@ migrations are an explicit deployment step, never work done by a web request.
 
 ## Display And Model Semantics
 
+MLB presentation assets belong to the web interface. A verified 30-team registry
+maps catalog IDs and saved game abbreviations to team identity. Official SVG
+marks use static imports, content hashes, and the existing CloudFront static
+cache. Player portraits load directly from MLB's image CDN at a bounded size;
+they do not use the web Lambda as an image proxy. Their reserved layout and
+initials fallback keep slow or failed imagery independent of replay commands.
+The [MLB identity record](records/2026-09-12-mlb-identity.md) documents sources,
+player affiliation, theme treatment, and verification.
+
 Forecast location is the mean of available model sample coordinates. Location
 labels derive from coordinates in the catcher’s view; they do not assume the
 batter’s inside/outside direction. The plot uses equal horizontal and vertical
