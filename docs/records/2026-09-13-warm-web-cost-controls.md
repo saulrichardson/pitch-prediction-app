@@ -118,6 +118,30 @@ preservation of the CloudFront configuration. Infrastructure tests assert one
 warm alias, qualified OAC permissions/origin, narrow shutdown IAM, retained
 state and alarm/schedule wiring. Live release evidence is recorded after rollout.
 
+The production release `serverless-2a07a126e664` now uses web version 1 with
+one READY provisioned instance. CloudWatch recorded provisioned-concurrency
+invocations after the CloudFront cutover. Both alias permissions completed
+before the distribution update began; only the qualified `live` Function URL
+remains. All 93 sampled health requests before, during and after rollout
+succeeded. Live replay commands measured 82 ms median and 124 ms maximum in
+the six-command sample. Ownership, origin rejection, idempotency, recovery,
+full replay completion and the 91-game catalog passed HTTP verification.
+The browser restored COL/DET and passed restart, reveal and advance.
+
+CI run `34740610034` passed 106 TypeScript tests including PostgreSQL,
+30 Python tests and 23 browser tests with one intentional browser skip.
+The guard's live read-only check reported $1.406 actual monthly spend and an
+armed state. A cutoff-topic message claiming a larger cost still re-read AWS
+and did not trip. IAM simulation allowed the five required shutdown operations
+and denied an unrelated function and function deletion. The operations email
+subscription was confirmed; its initial confirmation was moved out of spam,
+and the subsequent delivery test arrived in the inbox. All four alarms were OK.
+The destructive production stop was not deliberately triggered; its effects
+and failure/retry paths were verified through tests and scoped IAM checks.
+The model remains version 15. The account's existing cost-guard policy remains
+at its original v1. Private rollback and release receipts are under
+`.cache/warm-web-2026-09-13/`.
+
 Sources: [Lambda provisioned concurrency](https://docs.aws.amazon.com/lambda/latest/dg/provisioned-concurrency.html),
 [Lambda pricing](https://aws.amazon.com/lambda/pricing/),
 [AWS Budgets update and notification delays](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html),
