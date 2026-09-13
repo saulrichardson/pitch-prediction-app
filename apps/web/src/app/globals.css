@@ -287,6 +287,14 @@ summary::-webkit-details-marker {
   height: 100%;
   object-fit: contain;
 }
+.team-mark-fallback {
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
 .player-portrait {
   position: relative;
   display: flex;

@@ -4,6 +4,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   agentRules: false,
   allowedDevOrigins: ["127.0.0.1"],
+  turbopack: {
+    rules: {
+      "*.svg": {
+        condition: { query: "?raw" },
+        loaders: [path.join(__dirname, "loaders/svg-text.cjs")],
+        as: "*.js",
+      },
+    },
+  },
   images: {
     remotePatterns: [
       {

@@ -5,6 +5,13 @@ test("slow or unavailable portraits never block replay and team marks follow the
 }, testInfo) => {
   if (testInfo.project.name === "phone")
     await page.setViewportSize({ width: 320, height: 740 });
+  // A cold CDN previously sent one logo request per team to a Lambda limited
+  // to ten concurrent requests. The interface must carry its own small marks.
+  let separateLogoRequests = 0;
+  await page.route("**/_next/static/media/*.svg", async (route) => {
+    separateLogoRequests += 1;
+    await route.abort("failed");
+  });
   let releasePhotos = () => {};
   const pendingPhotos = new Promise<void>((resolve) => {
     releasePhotos = resolve;
@@ -73,6 +80,30 @@ test("slow or unavailable portraits never block replay and team marks follow the
     await expect(
       page.getByRole("button", { name: "Reveal pitch", exact: true }),
     ).toBeEnabled();
+    // A decode failure must leave the phone scoreboard identifiable.
+    await page
+      .locator(".scoreboard .team-mark img")
+      .first()
+      .dispatchEvent("error");
+    await expect(page.locator(".scoreboard .team-mark-fallback")).toHaveText(
+      "NYM",
+    );
+    await page.getByRole("button", { name: "Games", exact: true }).click();
+    await expect(
+      page.locator(".game-list .team-mark img").first(),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page
+          .locator(".game-list .team-mark img")
+          .evaluateAll(
+            (images: HTMLImageElement[]) =>
+              images.length > 0 &&
+              images.every((img) => img.complete && img.naturalWidth > 0),
+          ),
+      )
+      .toBe(true);
+    expect(separateLogoRequests).toBe(0);
   } finally {
     releasePhotos();
   }

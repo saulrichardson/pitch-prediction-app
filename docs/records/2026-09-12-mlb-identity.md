@@ -39,9 +39,20 @@ Unknown teams retain their supplied text without an invented logo or affiliation
   portrait format was verified directly with MLB. These are current player
   portraits, not photography from the replayed pitch.
 
-Static logo imports produce content-hashed URLs under `/_next/static/media`,
-which already receives CloudFront caching. The logo payload totals less than
-200 KB across all teams and themes; a page requests only its displayed marks.
+Logo SVGs are imported as raw text and encoded as image data URLs in the existing
+client bundle. The small `svg-text.cjs` loader applies only to `*.svg?raw`
+imports in Turbopack; the original artwork remains in individual, inspectable
+files. The raw payload totals less than 200 KB across all teams and themes and shares the
+JavaScript bundle's compression and content-hashed CloudFront caching.
+
+Live verification of the first implementation exposed 16 then 4 missing logos
+when opening 30 team marks against a cold CDN. CloudWatch recorded exactly 16
+then 4 web Lambda throttles in those minutes. The standalone SVGs were valid;
+separate asset requests exceeded the reserved concurrency of 10. Bundling this
+small, fixed asset set removes the request burst without expanding server
+concurrency. A logo decode failure displays its team abbreviation, including
+on narrow scoreboards where the adjacent code is visually hidden.
+
 Portraits are resized by MLB's CDN and loaded directly, without extra replay API
 work or Lambda image optimization. Reserved image dimensions prevent layout
 shifts. A failed portrait becomes initials; neither pending nor failed image
@@ -51,12 +62,15 @@ external photo request.
 ## Verification And Delivery
 
 Pure tests cover top/bottom player affiliation, unknown teams, and invalid
-portrait identifiers. The browser regression holds photo requests open through
-Start and Reveal, then fails them, verifies initials and theme-aware local
-logos, and advances again. Manual browser checks cover loaded photography,
-light/dark modes, the opening, replay, and game catalog, including 320-pixel
+portrait identifiers, and validate every SVG's namespace and view box. The
+browser regression blocks separate logo requests, holds photo requests open
+through Start and Reveal, then fails them, verifies initials and theme-aware
+logos, and advances again. It also verifies logo decode fallback and loaded
+catalog marks without individual logo requests. Manual browser checks cover
+loaded photography, light/dark modes, the opening, replay, and game catalog, including 320-pixel
 phones. The existing replay, preparation, and recovery tests remain applicable.
 
 Ship through the normal web-only CI and deployment path. No model, saved
 edition, schema, budget, or preparation-worker changes are needed. Verify live
-portraits, cached logo responses, and saved replay commands after deployment.
+portraits, all 30 catalog marks without separate requests, and saved replay
+commands after deployment.

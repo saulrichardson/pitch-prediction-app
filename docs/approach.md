@@ -96,8 +96,9 @@ migrations are an explicit deployment step, never work done by a web request.
 
 MLB presentation assets belong to the web interface. A verified 30-team registry
 maps catalog IDs and saved game abbreviations to team identity. Official SVG
-marks use static imports, content hashes, and the existing CloudFront static
-cache. Player portraits load directly from MLB's image CDN at a bounded size;
+marks are bundled as SVG data URLs through Turbopack's raw imports. Opening a
+full day's games adds no per-logo requests to the concurrency-limited web Lambda.
+Player portraits load directly from MLB's image CDN at a bounded size;
 they do not use the web Lambda as an image proxy. Their reserved layout and
 initials fallback keep slow or failed imagery independent of replay commands.
 The [MLB identity record](records/2026-09-12-mlb-identity.md) documents sources,

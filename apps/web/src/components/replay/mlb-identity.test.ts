@@ -1,4 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   matchupIdentity,
   playerInitials,
@@ -7,6 +11,31 @@ import {
 } from "./mlb-identity";
 
 describe("MLB matchup identity", () => {
+  it("loads every bundled logo as a standalone SVG image", () => {
+    const directory = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../assets/mlb/teams",
+    );
+    const files = readdirSync(directory, {
+      recursive: true,
+      encoding: "utf8",
+    }).filter((file) => file.endsWith(".svg"));
+    expect(files.length).toBeGreaterThanOrEqual(30);
+    for (const file of files) {
+      const svg = new DOMParser().parseFromString(
+        readFileSync(path.join(directory, file), "utf8"),
+        "image/svg+xml",
+      ).documentElement;
+      expect(svg.localName, file).toBe("svg");
+      expect(svg.namespaceURI, file).toBe("http://www.w3.org/2000/svg");
+      const box = svg.getAttribute("viewBox")!.split(/\s+/).map(Number);
+      expect(box.length, file).toBe(4);
+      expect(box.every(Number.isFinite), file).toBe(true);
+      expect(box[2], file).toBeGreaterThan(0);
+      expect(box[3], file).toBeGreaterThan(0);
+    }
+  });
+
   it("assigns the home pitcher and away batter in the top half", () => {
     const identity = matchupIdentity("NYM @ NYY", "top");
     expect(identity.pitcher.team?.name).toBe("New York Yankees");
