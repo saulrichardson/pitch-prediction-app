@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Barlow_Condensed, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
@@ -16,6 +16,13 @@ const body = Source_Sans_3({
   variable: "--font-body",
   weight: ["400", "500", "600", "700"]
 });
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f7f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#12151a" }
+  ]
+};
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),

@@ -18,6 +18,9 @@ Barlow Condensed and Source Sans 3 pair now has a consistent division of work:
 display type for pitches, team abbreviations, and key values; body type for
 names, context, and actions. No new font or animation dependency is needed.
 
+The subsequent [palette refinement](2026-09-12-cobalt-palette.md) supersedes the
+green and clay color choice while retaining this layout and type system.
+
 The comparison has three open columns on desktop. On phones, forecast and
 actual remain parallel and the shared diagram sits below them. The plot is
 larger, loses the ornamental dot grid, and retains every coordinate, clipping

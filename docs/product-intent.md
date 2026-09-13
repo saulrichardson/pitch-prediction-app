@@ -56,9 +56,10 @@ request has one retry action and preserves the last acknowledged view.
 - Copy names the next action or the current problem. Routine infrastructure,
   caveats, repeated readiness assurances, and invented confidence labels do not
   occupy the main experience.
-- Use a refined scorecard: warm paper and charcoal surfaces, a muted green
-  forecast, and a clay accent for the actual pitch and primary action. Condensed
-  display type carries pitch names and team abbreviations; body type carries
+- Use a refined scorecard: porcelain and graphite surfaces, cobalt actions,
+  blue forecasts, and copper actual pitches. Keep plot geometry neutral so color
+  belongs to the data. Adapt accent brightness and button text to each theme.
+  Condensed display type carries pitch names and team abbreviations; body type carries
   supporting facts. Open space and fine rules establish hierarchy.
 - Forecast and actual occupy parallel columns with a shared plot between them
   on larger screens and below them on phones. Keep the comparison readable at
