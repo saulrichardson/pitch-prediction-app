@@ -13,6 +13,7 @@
     "deploy": "cd .. && bash scripts/deploy-serverless-model.sh && bash scripts/deploy-serverless-web.sh",
     "deploy:model": "AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} cdk deploy PitchSequenceModelStack --require-approval never",
     "deploy:assets": "AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} cdk deploy PitchReplayWebAssetsStack --require-approval never",
+    "deploy:cost-controls": "AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} cdk deploy PitchReplayCostControlsStack --require-approval never",
     "deploy:serverless": "AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} cdk deploy PitchSequenceServerlessStack --require-approval never"
   },
   "devDependencies": {
@@ -20,5 +21,12 @@
     "aws-cdk-lib": "^2.253.1",
     "constructs": "^10.4.3",
     "tsx": "^4.21.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-budgets": "^3.1131.0",
+    "@aws-sdk/client-cloudfront": "^3.1131.0",
+    "@aws-sdk/client-lambda": "^3.1131.0",
+    "@aws-sdk/client-sns": "^3.1131.0",
+    "@aws-sdk/client-ssm": "^3.1131.0"
   }
 }

@@ -5,6 +5,10 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
 export AWS_REGION AWS_DEFAULT_REGION
 
+account_id="$(aws sts get-caller-identity --query Account --output text)"
+export COST_ACCOUNT_ID="${account_id}"
+node --import tsx scripts/check-cost-control.ts
+
 MODEL_ECR_REPOSITORY_NAME="${MODEL_ECR_REPOSITORY_NAME:-pitch-prediction-model-api}"
 MODEL_LAMBDA_FUNCTION_NAME="${MODEL_LAMBDA_FUNCTION_NAME:-pitch-sequence-serverless-model-lambda}"
 MODEL_LAMBDA_ALIAS="${MODEL_LAMBDA_ALIAS:-live}"
@@ -47,7 +51,6 @@ case "${MODEL_LAMBDA_ARCHITECTURE}" in
     ;;
 esac
 
-account_id="$(aws sts get-caller-identity --query Account --output text)"
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 image_uri="${registry}/${MODEL_ECR_REPOSITORY_NAME}:${MODEL_IMAGE_TAG}"
 
@@ -76,6 +79,7 @@ docker buildx build \
 docker push "${image_uri}"
 
 echo "Deploying PitchSequenceModelStack for ${MODEL_LAMBDA_FUNCTION_NAME}:${MODEL_LAMBDA_ALIAS}"
+node --import tsx scripts/check-cost-control.ts
 npm --workspace @pitch/infra run deploy:model
 
 if [ "${MODEL_LAMBDA_PROVISIONED_CONCURRENCY}" -gt 0 ]; then

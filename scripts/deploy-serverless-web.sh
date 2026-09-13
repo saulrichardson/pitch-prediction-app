@@ -5,6 +5,10 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
 export AWS_REGION AWS_DEFAULT_REGION
 
+account_id="$(aws sts get-caller-identity --query Account --output text)"
+export COST_ACCOUNT_ID="${account_id}"
+node --import tsx scripts/check-cost-control.ts
+
 ECR_REPOSITORY_NAME="${ECR_REPOSITORY_NAME:-pitch-prediction-app}"
 SERVERLESS_WEB_IMAGE_TAG="${SERVERLESS_WEB_IMAGE_TAG:-serverless-$(git rev-parse --short=12 HEAD)}"
 SERVERLESS_WEB_LATEST_TAG="${SERVERLESS_WEB_LATEST_TAG:-serverless-latest}"
@@ -19,7 +23,6 @@ export CLOUDFRONT_ALLOWED_COUNTRIES CUSTOM_DOMAIN_NAME ACM_CERTIFICATE_ARN
 STORAGE_MODE=dynamodb DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME:-pitch-sequence-serverless-state}" \
   npm run publish:replay -- --check
 
-account_id="$(aws sts get-caller-identity --query Account --output text)"
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 image_uri="${registry}/${ECR_REPOSITORY_NAME}:${SERVERLESS_WEB_IMAGE_TAG}"
 latest_uri="${registry}/${ECR_REPOSITORY_NAME}:${SERVERLESS_WEB_LATEST_TAG}"
@@ -81,6 +84,8 @@ aws s3 cp "${assets_dir}/favicon.svg" "s3://${assets_bucket}/releases/${SERVERLE
   --cache-control 'public,max-age=0,s-maxage=31536000' --only-show-errors
 
 echo "Deploying PitchSequenceServerlessStack with image ${SERVERLESS_WEB_IMAGE_TAG}"
-npm --workspace @pitch/infra run deploy:serverless
+node --import tsx scripts/check-cost-control.ts
+npm --workspace @pitch/infra run deploy:serverless -- --parameters "DistributionId=${distribution_id}"
+WEB_DISTRIBUTION_ID="${distribution_id}" node --import tsx scripts/verify-warm-web.ts
 
 echo "Serverless web Lambda deployed from ${SERVERLESS_WEB_IMAGE_TAG}"

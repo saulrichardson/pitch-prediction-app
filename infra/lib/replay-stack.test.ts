@@ -7,6 +7,76 @@ import { WebAssetsStack } from "./web-assets-stack";
 import { PitchSequenceModelStack } from "./pitch-sequence-model-stack";
 
 describe("prepared replay web infrastructure", () => {
+  it("routes the API through the alias that owns one warm instance", () => {
+    const template = Template.fromStack(
+      new PitchSequenceServerlessStack(new cdk.App(), "WarmTest", {
+        env: { account: "123456789012", region: "us-east-1" },
+      }),
+    );
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      FunctionName: "pitch-sequence-serverless-web",
+      MemorySize: 2048,
+      ReservedConcurrentExecutions: 10,
+    });
+    const [aliasId, alias] = Object.entries(
+      template.findResources("AWS::Lambda::Alias"),
+    )[0];
+    expect(alias.Properties.Name).toBe("live");
+    expect(alias.Properties.ProvisionedConcurrencyConfig).toEqual({
+      ProvisionedConcurrentExecutions: 1,
+    });
+    expect(JSON.stringify(alias.Properties.FunctionVersion)).toContain(
+      "CurrentVersion",
+    );
+    template.resourceCountIs("AWS::Lambda::Url", 1);
+    const [urlId, url] = Object.entries(
+      template.findResources("AWS::Lambda::Url"),
+    )[0];
+    expect(url.Properties.Qualifier).toBe("live");
+    expect(url.Properties.AuthType).toBe("AWS_IAM");
+    expect(url.DependsOn).toContain(aliasId);
+    const [distribution] = Object.values(
+      template.findResources("AWS::CloudFront::Distribution"),
+    );
+    const config = distribution.Properties.DistributionConfig;
+    const origin = config.Origins.find(
+      (item: { Id: string }) =>
+        item.Id === config.DefaultCacheBehavior.TargetOriginId,
+    );
+    expect(JSON.stringify(origin.DomainName)).toContain(urlId);
+    const permissions = Object.values(
+      template.findResources("AWS::Lambda::Permission"),
+    );
+    const invoke = permissions.find(
+      (p) => p.Properties.Action === "lambda:InvokeFunction",
+    );
+    expect(JSON.stringify(invoke?.Properties.FunctionName)).toContain(aliasId);
+    expect(invoke?.Properties.InvokedViaFunctionUrl).toBe(true);
+    const invokeUrl = permissions.find(
+      (p) => p.Properties.Action === "lambda:InvokeFunctionUrl",
+    );
+    expect(JSON.stringify(invokeUrl?.Properties.FunctionName)).toContain(urlId);
+    for (const permission of [invoke, invokeUrl]) {
+      expect(permission?.Properties.Principal).toBe("cloudfront.amazonaws.com");
+      expect(JSON.stringify(permission?.Properties.SourceArn)).toContain(
+        "distribution/",
+      );
+      expect(JSON.stringify(permission?.Properties.SourceArn)).toContain(
+        "DistributionId",
+      );
+    }
+    const permissionIds = Object.entries(
+      template.findResources("AWS::Lambda::Permission"),
+    )
+      .filter(
+        ([, resource]) =>
+          resource.Properties.Principal === "cloudfront.amazonaws.com",
+      )
+      .map(([id]) => id);
+    expect(distribution.DependsOn).toEqual(
+      expect.arrayContaining(permissionIds),
+    );
+  });
   it("keeps inference out of the web role and preserves origin ownership", () => {
     const stack = new PitchSequenceServerlessStack(
       new cdk.App(),
@@ -180,7 +250,9 @@ describe("prepared replay web infrastructure", () => {
       UpdateReplacePolicy: "Retain",
     });
     template.hasResourceProperties("AWS::Lambda::Function", {
-      Environment: { Variables: { OMP_NUM_THREADS: "1", MKL_NUM_THREADS: "1" } },
+      Environment: {
+        Variables: { OMP_NUM_THREADS: "1", MKL_NUM_THREADS: "1" },
+      },
     });
   });
 });

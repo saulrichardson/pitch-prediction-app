@@ -41,6 +41,18 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     );
     const customDomainName = process.env.CUSTOM_DOMAIN_NAME;
     const certificateArn = process.env.ACM_CERTIFICATE_ARN;
+    // This stack updates the existing production distribution. Its ID is
+    // supplied by the release script so new OAC permissions precede cutover.
+    const existingDistributionId = new cdk.CfnParameter(
+      this,
+      "DistributionId",
+      {
+        type: "String",
+        description:
+          "Existing distribution ID for granting origin access before traffic switches.",
+      },
+    );
+    const distributionArn = `arn:${this.partition}:cloudfront::${this.account}:distribution/${existingDistributionId.valueAsString}`;
 
     if (
       (customDomainName && !certificateArn) ||
@@ -95,6 +107,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       memorySize: webMemoryMb,
       timeout: cdk.Duration.seconds(webTimeoutSeconds),
       reservedConcurrentExecutions: webReservedConcurrency,
+      currentVersionOptions: { removalPolicy: cdk.RemovalPolicy.RETAIN },
       ephemeralStorageSize: cdk.Size.mebibytes(1024),
       logGroup: webLogGroup,
       environment: {
@@ -186,7 +199,14 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         ],
       }),
     );
-    const functionUrl = webFunction.addFunctionUrl({
+    const liveAlias = new lambda.Alias(this, "WebLiveAlias", {
+      aliasName: "live",
+      version: webFunction.currentVersion,
+      provisionedConcurrentExecutions: 1,
+    });
+    // Provisioned capacity serves qualified invocations only. CloudFront must
+    // use the alias URL, otherwise requests still cold-start on $LATEST.
+    const functionUrl = liveAlias.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });
 
@@ -340,12 +360,29 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       comment: "Pitch Prediction App serverless web/API distribution",
     });
 
-    webFunction.addPermission("AllowCloudFrontInvokeFunctionViaUrl", {
-      principal: new iam.ServicePrincipal("cloudfront.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: `arn:${cdk.Aws.PARTITION}:cloudfront::${cdk.Aws.ACCOUNT_ID}:distribution/${distribution.distributionId}`,
-      invokedViaFunctionUrl: true,
-    });
+    const invokePermission = new lambda.CfnPermission(
+      this,
+      "WarmOriginInvokePermission",
+      {
+        principal: "cloudfront.amazonaws.com",
+        action: "lambda:InvokeFunction",
+        functionName: liveAlias.functionArn,
+        sourceArn: distributionArn,
+        invokedViaFunctionUrl: true,
+      },
+    );
+    const distributionResource = distribution.node
+      .defaultChild as cloudfront.CfnDistribution;
+    distributionResource.addDependency(invokePermission);
+    // The OAC helper normally references the distribution, which delays its
+    // permission until after a distribution update. Authorize this known
+    // distribution first, then allow CloudFormation to change the API origin.
+    for (const permission of distribution.node.findAll()) {
+      if (permission instanceof lambda.CfnPermission) {
+        permission.sourceArn = distributionArn;
+        distributionResource.addDependency(permission);
+      }
+    }
 
     new cdk.CfnOutput(this, "ServerlessWebUrl", {
       value: `https://${distribution.distributionDomainName}`,
@@ -364,6 +401,8 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ServerlessWebFunctionName", {
       value: webFunction.functionName,
     });
+    new cdk.CfnOutput(this, "WebAliasName", { value: liveAlias.aliasName });
+    new cdk.CfnOutput(this, "WebOriginUrl", { value: functionUrl.url });
   }
 }
 

@@ -139,10 +139,16 @@ feature age is visible through the game date. Run the CLI with an immutable
 model version/checkpoint and retain the review JSON.
 
 The low-cost deployment keeps model reserved concurrency 1, provisioned
-concurrency 0, web reserved concurrency 10, DynamoDB throughput limits, one-day
+concurrency 0, web reserved concurrency 10 with one 2 GB provisioned instance on
+the published `live` alias, DynamoDB throughput limits, one-day
 Lambda logs, and the configured CloudFront country allowlist. Web timeout is 30
 seconds; the dedicated preparation worker runs separately. AWS budget alerts are
-monitoring controls, not a hard billing cap. Model SnapStart/checkpoint packaging
+paired with a latched $50 monthly account-spend shutdown. Warnings fire at $25,
+$40, a $50 month-end forecast, and $2 daily actual spend. The independent cost
+guard removes provisioned capacity, stops all three application functions, and
+disables CloudFront traffic. Billing lag and retained storage/snapshots prevent
+an exact hard billing cap. Routine releases fail closed on a tripped latch,
+missing controls, or reported spend at the limit. Model SnapStart/checkpoint packaging
 remain the existing operating model and require actual AWS verification on
 release.
 
@@ -153,6 +159,11 @@ document and favicon; hashed scripts, styles, and fonts go directly to S3.
 Old hashes stay available for open tabs and rollback. Private APIs bypass the
 CDN cache; the public summary's cache has zero minimum/default TTL so failures
 and mutations cannot become shared responses.
+CloudFront's API origin is the IAM Function URL attached to the warm `live`
+alias; targeting `$LATEST` would bypass provisioned capacity. The release script
+verifies the deployed origin and one READY provisioned execution environment.
+The [warm web and cost-control record](records/2026-09-13-warm-web-cost-controls.md)
+owns budget setup, alerts, shutdown limitations, and explicit recovery.
 
 The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each
 prediction. It evaluates the prefix once, then one new token at a time using

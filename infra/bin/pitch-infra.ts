@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import { PitchSequenceModelStack } from "../lib/pitch-sequence-model-stack";
 import { PitchSequenceServerlessStack } from "../lib/pitch-sequence-serverless-stack";
 import { WebAssetsStack } from "../lib/web-assets-stack";
+import { CostControlsStack } from "../lib/cost-controls-stack";
 
 const app = new cdk.App();
 
@@ -20,6 +21,7 @@ new PitchSequenceModelStack(app, "PitchSequenceModelStack", {
 });
 
 new WebAssetsStack(app, "PitchReplayWebAssetsStack", { env });
+new CostControlsStack(app, "PitchReplayCostControlsStack", { env });
 
 new PitchSequenceServerlessStack(app, "PitchSequenceServerlessStack", {
   env,
