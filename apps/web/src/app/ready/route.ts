@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server";
-import { getStorageMode } from "@pitch/db";
 import { getReplayService } from "@/lib/replay-service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const edition = await (await getReplayService()).featured();
+    await (await getReplayService()).featured();
     return NextResponse.json(
-      {
-        status: "ok",
-        storageMode: getStorageMode(),
-        editionId: edition.id,
-        pitchCount: edition.pitchCount,
-      },
+      { status: "ok" },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (error) {

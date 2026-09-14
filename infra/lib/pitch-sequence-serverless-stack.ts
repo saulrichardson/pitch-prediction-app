@@ -251,8 +251,66 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         code: cloudfront.FunctionCode.fromInline(`function handler(event) {
         var request = event.request;
         request.headers['x-forwarded-host'] = { value: request.headers.host.value };
+        request.headers['x-viewer-ip'] = { value: event.viewer.ip };
         return request;
       }`),
+      },
+    );
+
+    const browserSecurityPolicy = new cloudfront.ResponseHeadersPolicy(
+      this,
+      "BrowserSecurityPolicy",
+      {
+        comment: "CSP, transport, framing and browser capability policy",
+        securityHeadersBehavior: {
+          contentSecurityPolicy: {
+            contentSecurityPolicy: [
+              "default-src 'self'",
+              "base-uri 'self'",
+              "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com",
+              "font-src 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "img-src 'self' data: https://img.mlbstatic.com https://*.google-analytics.com",
+              "manifest-src 'self'",
+              "object-src 'none'",
+              "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+              "script-src-attr 'none'",
+              "style-src 'self' 'unsafe-inline'",
+              "upgrade-insecure-requests",
+            ].join("; "),
+            override: true,
+          },
+          contentTypeOptions: { override: true },
+          frameOptions: {
+            frameOption: cloudfront.HeadersFrameOption.DENY,
+            override: true,
+          },
+          referrerPolicy: {
+            referrerPolicy:
+              cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN,
+            override: true,
+          },
+          strictTransportSecurity: {
+            accessControlMaxAge: cdk.Duration.days(730),
+            includeSubdomains: true,
+            override: true,
+          },
+          xssProtection: {
+            protection: true,
+            modeBlock: true,
+            override: true,
+          },
+        },
+        customHeadersBehavior: {
+          customHeaders: [
+            {
+              header: "Permissions-Policy",
+              value: "camera=(), microphone=(), geolocation=(), payment=()",
+              override: true,
+            },
+          ],
+        },
       },
     );
 
@@ -269,8 +327,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
         originRequestPolicy: functionOriginRequestPolicy,
-        responseHeadersPolicy:
-          cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+        responseHeadersPolicy: browserSecurityPolicy,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       additionalBehaviors: {
@@ -284,8 +341,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
           ],
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          responseHeadersPolicy:
-            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          responseHeadersPolicy: browserSecurityPolicy,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         },
@@ -294,8 +350,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          responseHeadersPolicy:
-            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          responseHeadersPolicy: browserSecurityPolicy,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         },
@@ -309,8 +364,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
           ],
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-          responseHeadersPolicy:
-            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          responseHeadersPolicy: browserSecurityPolicy,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         },
@@ -334,8 +388,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
             enableAcceptEncodingBrotli: true,
           }),
           originRequestPolicy: functionOriginRequestPolicy,
-          responseHeadersPolicy:
-            cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+          responseHeadersPolicy: browserSecurityPolicy,
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         },

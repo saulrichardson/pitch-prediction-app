@@ -10,6 +10,6 @@ export async function getCatalogService() {
 
 export function catalogHttpError(error: unknown) {
   return error instanceof CatalogError
-    ? new HttpError(error.status, error.message, error.code)
+    ? new HttpError(error.status, error.message, error.code, error.details)
     : error;
 }

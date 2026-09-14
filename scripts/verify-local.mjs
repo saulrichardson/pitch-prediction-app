@@ -30,7 +30,7 @@ const server = spawn(
     env: {
       ...process.env,
       STORAGE_MODE: "memory",
-      SESSION_SECRET: "local-verification-only",
+      SESSION_SECRET: "local-verification-session-secret-only",
       REPLAY_EDITION_PATH: editionPath,
     },
   },

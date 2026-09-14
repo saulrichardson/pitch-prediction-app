@@ -76,11 +76,11 @@ function hidden(view) {
   assert.equal(view.history.length, view.index);
 }
 
-await check("readiness requires a complete published replay", async () => {
+await check("readiness validates a complete replay without disclosing internals", async () => {
   assert.equal((await owner("/health")).status, 200);
   const ready = await owner("/ready");
   assert.equal(ready.status, 200, JSON.stringify(ready.payload));
-  assert.ok(ready.payload.editionId);
+  assert.deepEqual(ready.payload, { status: "ok" });
   const featured = await owner("/api/replays");
   edition = featured.payload.edition;
   assert.ok(edition.pitchCount >= 3 && edition.pitchCount <= 8);

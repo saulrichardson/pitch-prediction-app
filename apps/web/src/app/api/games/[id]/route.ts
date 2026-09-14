@@ -9,6 +9,7 @@ import {
   serverError,
 } from "@/lib/http";
 import { withSession } from "@/lib/route-params";
+import { preparationCallerId } from "@/lib/auth";
 
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: Request, context: Context) {
@@ -31,7 +32,9 @@ export async function POST(request: Request, context: Context) {
     await withSession();
     const { id } = await context.params;
     return ok({
-      replay: await (await getCatalogService()).request(id, input.data.date),
+      replay: await (
+        await getCatalogService()
+      ).request(id, input.data.date, preparationCallerId(request)),
     });
   } catch (error) {
     return serverError(catalogHttpError(error));

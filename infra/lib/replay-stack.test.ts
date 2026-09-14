@@ -100,6 +100,26 @@ describe("prepared replay web infrastructure", () => {
       template.findResources("AWS::CloudFront::Function"),
     );
     expect(functions).toContain("x-forwarded-host");
+    expect(functions).toContain("x-viewer-ip");
+    expect(functions).toContain("event.viewer.ip");
+    template.hasResourceProperties("AWS::CloudFront::ResponseHeadersPolicy", {
+      ResponseHeadersPolicyConfig: {
+        SecurityHeadersConfig: {
+          ContentSecurityPolicy: {
+            ContentSecurityPolicy: Match.stringLikeRegexp(
+              "frame-ancestors 'none'",
+            ),
+            Override: true,
+          },
+          FrameOptions: { FrameOption: "DENY", Override: true },
+          StrictTransportSecurity: {
+            AccessControlMaxAgeSec: 63072000,
+            IncludeSubdomains: true,
+            Override: true,
+          },
+        },
+      },
+    });
     template.hasResourceProperties("AWS::DynamoDB::Table", {
       StreamSpecification: { StreamViewType: "NEW_IMAGE" },
     });

@@ -17,12 +17,14 @@ import {
   type GamePreparationJob,
 } from "./job";
 import { preparationBudget } from "./preparation";
+import { reserveCallerPreparation } from "./caller-budget";
 
 export class CatalogError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly details: Record<string, unknown> | null = null,
   ) {
     super(message);
   }
@@ -165,7 +167,7 @@ export function catalogService(input: {
       const selected = await game(gamePk, date);
       return { game: selected, replay: await availability(gamePk) };
     },
-    async request(gamePk: string, date: string) {
+    async request(gamePk: string, date: string, callerId: string) {
       const selected = await game(gamePk, date);
       if (selected.status !== "complete")
         throw new CatalogError(
@@ -196,6 +198,21 @@ export function catalogService(input: {
         !preparationIsStale(previous.value, now())
       )
         return availability(gamePk);
+      if (!budget.limited) {
+        const caller = await reserveCallerPreparation(
+          storage,
+          callerId,
+          gamePk,
+          now(),
+        );
+        if (!caller.allowed)
+          throw new CatalogError(
+            429,
+            "caller_preparation_limit",
+            "This connection has prepared several games. Try again after the reset.",
+            { retryAt: caller.retryAt },
+          );
+      }
       const timestamp = now().toISOString();
       const job: GamePreparationJob = {
         gamePk,

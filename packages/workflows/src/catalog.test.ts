@@ -7,6 +7,7 @@ import { jobKey, type GamePreparationJob } from "./job";
 import type { CatalogGame } from "@pitch/domain";
 
 const timestamp = new Date("2026-09-12T18:00:00Z");
+const caller = "b".repeat(64);
 export const catalogGame: CatalogGame = {
   gamePk: "823496",
   date: "2026-09-12",
@@ -42,11 +43,11 @@ describe("catalog and preparation requests", () => {
     await expect(service.list("2026-09-13")).rejects.toMatchObject({
       code: "date_out_of_range",
     });
-    await expect(service.request("44", catalogGame.date)).rejects.toMatchObject(
-      { code: "game_not_complete" },
-    );
     await expect(
-      service.request("999", catalogGame.date),
+      service.request("44", catalogGame.date, caller),
+    ).rejects.toMatchObject({ code: "game_not_complete" });
+    await expect(
+      service.request("999", catalogGame.date, caller),
     ).rejects.toMatchObject({ code: "game_not_found" });
     expect(await storage.read(jobKey("44"))).toBeNull();
   });
@@ -55,14 +56,14 @@ describe("catalog and preparation requests", () => {
     await service.list();
     const replies = await Promise.all(
       Array.from({ length: 4 }, () =>
-        service.request(catalogGame.gamePk, catalogGame.date),
+        service.request(catalogGame.gamePk, catalogGame.date, caller),
       ),
     );
     expect(replies.every((r) => r.status === "queued")).toBe(true);
     expect((await storage.read(jobKey(catalogGame.gamePk)))?.revision).toBe(0);
     expect(schedule).toHaveBeenCalledTimes(1);
     const before = await storage.read(jobKey(catalogGame.gamePk));
-    await service.request(catalogGame.gamePk, catalogGame.date);
+    await service.request(catalogGame.gamePk, catalogGame.date, caller);
     expect(await storage.read(jobKey(catalogGame.gamePk))).toEqual(before);
   });
   it("shows an actionable preparation limit across refresh without queuing model work", async () => {
@@ -75,7 +76,11 @@ describe("catalog and preparation requests", () => {
       },
       null,
     );
-    const result = await service.request(catalogGame.gamePk, catalogGame.date);
+    const result = await service.request(
+      catalogGame.gamePk,
+      catalogGame.date,
+      caller,
+    );
     expect(result).toMatchObject({
       status: "failed",
       retryAt: "2026-09-13T00:00:00.000Z",
@@ -100,7 +105,8 @@ describe("catalog and preparation requests", () => {
       null,
     );
     expect(
-      (await service.request(catalogGame.gamePk, catalogGame.date)).status,
+      (await service.request(catalogGame.gamePk, catalogGame.date, caller))
+        .status,
     ).toBe("queued");
   });
   it("lists validated saved editions without reading large prediction records or consuming inference", async () => {
@@ -126,14 +132,14 @@ describe("catalog and preparation requests", () => {
     expect(read.mock.calls.some(([key]) => key.startsWith("edition:"))).toBe(
       false,
     );
-    expect((await service.request(catalogGame.gamePk, dates)).status).toBe(
-      "ready",
-    );
+    expect(
+      (await service.request(catalogGame.gamePk, dates, caller)).status,
+    ).toBe("ready");
     expect(await storage.read(jobKey(catalogGame.gamePk))).toBeNull();
   });
   it("lets an interrupted job resume and keeps an in-flight game readable as the date window rolls", async () => {
     const { storage, service } = setup();
-    await service.request(catalogGame.gamePk, catalogGame.date);
+    await service.request(catalogGame.gamePk, catalogGame.date, caller);
     const later = catalogService({
       storage,
       schedule: vi.fn(async () => [catalogGame]),
@@ -145,7 +151,7 @@ describe("catalog and preparation requests", () => {
     const previous = (await storage.read<GamePreparationJob>(
       jobKey(catalogGame.gamePk),
     ))!;
-    await later.request(catalogGame.gamePk, catalogGame.date);
+    await later.request(catalogGame.gamePk, catalogGame.date, caller);
     expect(
       (await storage.read<GamePreparationJob>(jobKey(catalogGame.gamePk)))!
         .value.requestId,
@@ -159,7 +165,7 @@ describe("catalog and preparation requests", () => {
       (await rolled.status(catalogGame.gamePk, catalogGame.date)).game.gamePk,
     ).toBe(catalogGame.gamePk);
     await expect(
-      rolled.request(catalogGame.gamePk, catalogGame.date),
+      rolled.request(catalogGame.gamePk, catalogGame.date, caller),
     ).rejects.toMatchObject({ code: "date_out_of_range" });
   });
 });

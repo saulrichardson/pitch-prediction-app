@@ -10,6 +10,8 @@
   interface, a Lambda Web Adapter API container, and a separate model Lambda
   container managed by AWS CDK.
 - Signed anonymous workspace cookies; no user-account service.
+- CloudFront-derived, HMAC-pseudonymized viewer identities for preparation
+  admission; raw network addresses are not stored.
 - Vitest, pytest, HTTP smoke checks, Playwright, type checks, ESLint, and builds.
 
 ## Architecture
@@ -94,6 +96,10 @@ process-cache persistence are absent from the active path.
 10. Preparation reserves one model attempt at a time in an atomic monthly
     counter: 60 per UTC day and 400 per UTC month. Failed invocations count.
     Saved successful forecasts are reused after interruption.
+11. CloudFront overwrites the trusted viewer-address header before forwarding
+    API requests. The web route HMAC-pseudonymizes that address and never stores
+    it. An atomic caller budget admits at most four distinct games per UTC day
+    and twenty per UTC month; duplicate requests for one game are idempotent.
 
 DynamoDB records use `REPLAY#<key>` / `RECORD`; PostgreSQL uses `replay_records`.
 Legacy tables/records are retained and are not read by this runtime. SQL
@@ -183,8 +189,10 @@ validated edition before any ready index. Existing edition/session URLs continue
 working when their game leaves the seven-day discovery window.
 
 `/health` reports process liveness. `/ready` reads and validates the featured
-edition in the configured storage; it returns 503 when the product cannot open
-a replay. Model readiness is an operator concern and does not gate replay reads.
+edition in the configured storage but exposes only a generic status; it returns
+503 when the product cannot open a replay. Model readiness is an operator
+concern and does not gate replay reads. CloudFront applies an enforced CSP,
+frame denial, capability restrictions, and two-year HSTS to every behavior.
 
 Expected checks:
 

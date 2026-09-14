@@ -9,6 +9,8 @@ import { gamePreparationWorker } from "./game-preparation";
 import { jobKey, type GamePreparationJob } from "./job";
 import type { CatalogGame } from "@pitch/domain";
 
+const caller = "c".repeat(64);
+
 function setup() {
   const edition = fixtureEdition();
   edition.game.gamePk = "42";
@@ -69,7 +71,7 @@ describe("durable game preparation", () => {
       { key: "featured", revision: 0, value: { editionId: "old-featured" } },
       null,
     );
-    await s.service.request("42", s.edition.game.officialDate);
+    await s.service.request("42", s.edition.game.officialDate, caller);
     const id = (await s.job()).requestId;
     await s.run("42", id);
     expect(await s.job()).toMatchObject({
@@ -93,7 +95,7 @@ describe("durable game preparation", () => {
     s.predict
       .mockResolvedValueOnce(fixturePrediction(0))
       .mockRejectedValueOnce(new Error("connection interrupted"));
-    await s.service.request("42", s.edition.game.officialDate);
+    await s.service.request("42", s.edition.game.officialDate, caller);
     const previous = (await s.job()).requestId;
     await s.run("42", previous);
     expect(await s.job()).toMatchObject({
@@ -104,7 +106,7 @@ describe("durable game preparation", () => {
     });
     expect(await s.storage.read("game-edition:42")).toBeNull();
     s.advance();
-    await s.service.request("42", s.edition.game.officialDate);
+    await s.service.request("42", s.edition.game.officialDate, caller);
     await s.run("42", previous);
     expect(s.predict).toHaveBeenCalledTimes(2);
     await s.run("42", (await s.job()).requestId);
@@ -115,7 +117,7 @@ describe("durable game preparation", () => {
   it("rejects unusable or mismatched feeds before invoking the model", async () => {
     const s = setup();
     s.loadGame.mockResolvedValue({ game: s.edition.game, pitches: [] });
-    await s.service.request("42", s.edition.game.officialDate);
+    await s.service.request("42", s.edition.game.officialDate, caller);
     await s.run("42", (await s.job()).requestId);
     expect(await s.job()).toMatchObject({ status: "failed", retryable: false });
     expect(s.predict).not.toHaveBeenCalled();
@@ -123,7 +125,7 @@ describe("durable game preparation", () => {
   });
   it("gives concurrent delivery of the same request one owner", async () => {
     const s = setup();
-    await s.service.request("42", s.edition.game.officialDate);
+    await s.service.request("42", s.edition.game.officialDate, caller);
     const id = (await s.job()).requestId;
     await Promise.all([s.run("42", id), s.run("42", id)]);
     expect(s.predict).toHaveBeenCalledTimes(4);
