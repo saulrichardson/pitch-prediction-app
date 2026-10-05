@@ -117,7 +117,11 @@ export default function PitchPredictionApp() {
           <Scoreboard replay={replay} />
           <div className="replay-heading">
             <div>
-              <p className="eyebrow">At the plate</p>
+              <p className="eyebrow">
+                {replay.phase === "complete"
+                  ? "At-bat complete"
+                  : "At the plate"}
+              </p>
               <h1>
                 <span className="matchup-player">
                   <PlayerPortrait
@@ -206,13 +210,9 @@ export default function PitchPredictionApp() {
               <button
                 className="button primary"
                 onClick={() =>
-                  app.send(
-                    replay.phase === "complete"
-                      ? "restart"
-                      : replay.phase === "forecast"
-                        ? "reveal"
-                        : "next",
-                  )
+                  replay.phase === "complete" && !app.needsRetry
+                    ? app.browse(null)
+                    : app.send(replay.phase === "forecast" ? "reveal" : "next")
                 }
                 disabled={app.busy}
               >
@@ -222,17 +222,11 @@ export default function PitchPredictionApp() {
                 {app.needsRetry && !app.busy
                   ? "Try again"
                   : replay.phase === "complete"
-                    ? "Replay again"
+                    ? "Choose another game"
                     : replay.phase === "forecast"
                       ? "Reveal pitch"
                       : "Next pitch"}
-                {!app.busy ? (
-                  replay.phase === "complete" ? (
-                    <RotateCcw size={16} />
-                  ) : (
-                    <ArrowRight size={17} />
-                  )
-                ) : null}
+                {!app.busy ? <ArrowRight size={16} /> : null}
               </button>
             </div>
           </div>
@@ -241,6 +235,13 @@ export default function PitchPredictionApp() {
               <div>
                 <p className="eyebrow">At-bat complete</p>
                 <h2>{replay.summary.outcome}</h2>
+                <button
+                  className="text-button"
+                  onClick={() => app.send("restart")}
+                  disabled={app.busy || app.needsRetry}
+                >
+                  <RotateCcw size={14} /> Replay again
+                </button>
               </div>
               <p>
                 <strong>
@@ -262,7 +263,12 @@ export default function PitchPredictionApp() {
               {gameDate(replay.edition.game.officialDate)} · MLB replay
             </span>
             <span className="keyboard-hint">
-              ← Back <span>·</span> → Continue
+              ← Back
+              {replay.phase !== "complete" ? (
+                <>
+                  <span>·</span> → Continue
+                </>
+              ) : null}
             </span>
           </footer>
         </>

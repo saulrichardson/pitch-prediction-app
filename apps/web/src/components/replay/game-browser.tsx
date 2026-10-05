@@ -44,6 +44,10 @@ export function GameBrowser({
     replay: GameAvailability;
   } | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<{
+    gamePk: string;
+    message: string;
+  } | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [retryAllowedAt, setRetryAllowedAt] = useState<string | null>(null);
   const opened = useRef<string | null>(null);
@@ -152,6 +156,7 @@ export function GameBrowser({
       const initialRoute = window.location.search;
       setRequesting(true);
       setSelectionError(null);
+      setRequestError(null);
       try {
         const result = await requestJson<{ replay: GameAvailability }>(
           `/api/games/${game.gamePk}`,
@@ -165,11 +170,13 @@ export function GameBrowser({
         if (signal?.aborted || window.location.search !== initialRoute) return;
         setSelection({ game, replay: { status: "available" } });
         onBrowse(game.date, game.gamePk);
-        setSelectionError(
-          error instanceof Error
-            ? error.message
-            : "The replay couldn’t be reached.",
-        );
+        setRequestError({
+          gamePk: game.gamePk,
+          message:
+            error instanceof Error
+              ? error.message
+              : "The replay couldn’t be reached.",
+        });
       } finally {
         if (!signal?.aborted) setRequesting(false);
       }
@@ -179,6 +186,13 @@ export function GameBrowser({
 
   const selected = selection?.game.gamePk === gamePk ? selection : null;
   const progress = selected?.replay;
+  const requestNotice =
+    requestError?.gamePk === gamePk &&
+    (!progress ||
+      progress.status === "available" ||
+      progress.status === "failed")
+      ? requestError.message
+      : null;
   const selectedDate = date ?? catalog?.date;
   const retryAt = progress?.status === "failed" ? progress.retryAt : null;
   useEffect(() => {
@@ -263,8 +277,10 @@ export function GameBrowser({
               Back to games
             </button>
           </div>
-          {selectionError || notice ? (
-            <p className="connection-notice">{selectionError ?? notice}</p>
+          {selectionError || requestNotice || notice ? (
+            <p className="connection-notice">
+              {selectionError ?? requestNotice ?? notice}
+            </p>
           ) : progress?.status === "failed" ? (
             <p>{progress.message}</p>
           ) : progress?.status === "preparing" ? (
@@ -398,9 +414,11 @@ export function GameBrowser({
                 disabled={game.status !== "complete" || busy || requesting}
                 aria-label={`${game.away.name} at ${game.home.name}${game.doubleheader ? `, game ${game.gameNumber}` : ""}, ${game.status === "complete" ? action : game.statusLabel}`}
                 onClick={() =>
-                  game.replay.status === "ready"
-                    ? onOpen(game.replay.edition.id)
-                    : request(game)
+                  availability.status === "ready"
+                    ? onOpen(availability.edition.id)
+                    : activePreparation
+                      ? onBrowse(game.date, game.gamePk)
+                      : request(game)
                 }
               >
                 <span className="game-teams">

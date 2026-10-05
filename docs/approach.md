@@ -188,6 +188,17 @@ responses and the pinned version survive retries. Publication writes the full
 validated edition before any ready index. Existing edition/session URLs continue
 working when their game leaves the seven-day discovery window.
 
+Completion keeps the final revealed pitch and offers **Choose another game**;
+the recap owns the explicit **Replay again** action. Invalid or unavailable
+explicit replay links remain visible errors, while stale local resume hints
+may return to the featured introduction. Superseded restoration requests cannot
+start sessions or clear a newer URL. Preparation request errors remain attached
+to their selected game across status polling; viewing active preparation only
+reads progress.
+
+Both local and GitHub web releases use `scripts/deploy-serverless-web.sh` so
+cost checks, S3 assets, the CloudFront document and the API image move together.
+
 `/health` reports process liveness. `/ready` reads and validates the featured
 edition in the configured storage but exposes only a generic status; it returns
 503 when the product cannot open a replay. Model readiness is an operator

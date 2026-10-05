@@ -69,15 +69,6 @@ jobs:
           done
           echo "ACM certificate was not issued in time. Confirm the Cloudflare DNS validation CNAME exists." >&2
           exit 1
-      - name: Ensure ECR repository and lifecycle
-        run: |
-          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY_NAME" >/dev/null 2>&1 \
-            || aws ecr create-repository --repository-name "$ECR_REPOSITORY_NAME" >/dev/null
-          LIFECYCLE_POLICY='{"rules":[{"rulePriority":1,"description":"Expire untagged images after 1 day","selection":{"tagStatus":"untagged","countType":"sinceImagePushed","countUnit":"days","countNumber":1},"action":{"type":"expire"}},{"rulePriority":2,"description":"Keep the 3 most recent tagged images","selection":{"tagStatus":"tagged","tagPatternList":["*"],"countType":"imageCountMoreThan","countNumber":3},"action":{"type":"expire"}}]}'
-          aws ecr put-lifecycle-policy --repository-name "$ECR_REPOSITORY_NAME" --lifecycle-policy-text "$LIFECYCLE_POLICY" >/dev/null
-      - name: Login to ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
       - name: Build, push, and deploy model Lambda
         run: bash scripts/deploy-serverless-model.sh
       - name: Prepare and publish a complete replay
@@ -89,12 +80,8 @@ jobs:
           MODEL_VERSION="$(aws lambda get-alias --function-name "$MODEL_LAMBDA_FUNCTION_NAME" --name "$MODEL_LAMBDA_ALIAS" --query FunctionVersion --output text)"
           export MODEL_LAMBDA_FUNCTION_NAME="${MODEL_LAMBDA_FUNCTION_NAME}:${MODEL_VERSION}"
           npm run prepare:replay -- --publish --model-artifact "${MODEL_LAMBDA_FUNCTION_NAME}:${MODEL_IMAGE_TAG}:normalizer-v3:samples8"
-      - name: Build and push serverless web image
-        run: |
-          IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY_NAME}:${SERVERLESS_WEB_IMAGE_TAG}"
-          docker buildx build --platform linux/amd64 --provenance=false -f Dockerfile.web-lambda -t "$IMAGE" --push .
-      - name: Deploy CDK stack
-        run: npm --workspace @pitch/infra run deploy:serverless
+      - name: Build, publish assets, and deploy web
+        run: bash scripts/deploy-serverless-web.sh
       - name: Resolve serverless URL
         id: app-url
         run: |

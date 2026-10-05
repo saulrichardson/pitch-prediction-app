@@ -1,6 +1,108 @@
 import { expect, test } from "@playwright/test";
 import type { GameCatalog } from "@pitch/domain";
 
+test("a preparation rejection remains visible after the selected game loads", async ({
+  page,
+}) => {
+  const message = "Daily preparation allowance reached. Try again tomorrow.";
+  await page.route("**/api/games/900004", async (route) => {
+    if (route.request().method() === "POST")
+      await route.fulfill({
+        status: 429,
+        json: { code: "caller_budget_exceeded", error: message },
+      });
+    else await route.continue();
+  });
+  await page.goto("/?browse=1");
+  await page
+    .getByRole("button", {
+      name: "Seattle Mariners at Los Angeles Dodgers, game 2, prepare replay",
+      exact: true,
+    })
+    .click();
+  const panel = page.getByRole("region", {
+    name: "Selected game",
+    exact: true,
+  });
+  await expect(
+    panel.getByRole("heading", { name: "SEA at LAD" }),
+  ).toBeVisible();
+  await expect(panel).toContainText(message);
+  await page
+    .getByRole("button", { name: "Back to games", exact: true })
+    .click();
+  await expect(page.getByText(message)).not.toBeVisible();
+});
+
+test("a missing replay stays explicit instead of opening an unrelated feature", async ({
+  page,
+}) => {
+  for (const id of ["d".repeat(64), "not-a-replay"]) {
+    await page.goto(`/?replay=${id}`);
+    await expect(
+      page.getByRole("heading", { name: "Replay unavailable." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Start replay", exact: true }),
+    ).not.toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`replay=${id}$`));
+    await page.getByRole("button", { name: "Games", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Choose a game." }),
+    ).toBeVisible();
+  }
+});
+
+test("a late missing-session response cannot replace a newly opened game", async ({
+  page,
+}) => {
+  const missing = "d".repeat(64);
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requested!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  let missingStarts = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.postData()?.includes(missing))
+      missingStarts++;
+  });
+  await page.route(`**/api/replays/${missing}`, async (route) => {
+    requested();
+    await blocked;
+    await route.fulfill({
+      status: 404,
+      json: {
+        code: "session_not_found",
+        error: "Start this replay to continue.",
+      },
+    });
+  });
+  await page.goto(`/?replay=${missing}`);
+  await started;
+  await page.getByRole("button", { name: "Games", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: "Seattle Mariners at Los Angeles Dodgers, open replay",
+      exact: true,
+    })
+    .click();
+  await expect(page).toHaveURL(/replay=b{64}/);
+  const response = page.waitForResponse(`**/api/replays/${missing}`);
+  release();
+  await response;
+  // Flush subsequent API work, if any, before checking the saved destination.
+  await page.request.get("/ready");
+  await expect(page).toHaveURL(/replay=b{64}/);
+  expect(missingStarts).toBe(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem("pitch.replay.v1")),
+  ).toBe("b".repeat(64));
+});
+
 test("keeps an interrupted command with its game while another game is played", async ({
   page,
   context,
@@ -165,6 +267,7 @@ test("shows durable preparation progress across refresh and opens the completed 
   page,
 }) => {
   let ready = false;
+  let preparationRequests = 0;
   await page.route("**/api/games", async (route) => {
     const response = await route.fetch();
     const catalog = (await response.json()) as GameCatalog;
@@ -182,6 +285,7 @@ test("shows durable preparation progress across refresh and opens the completed 
   });
   await page.route("**/api/games/900002**", async (route) => {
     if (route.request().method() === "POST") {
+      preparationRequests++;
       await route.fulfill({
         json: { replay: { status: "queued", completed: 0, total: null } },
       });
@@ -212,6 +316,16 @@ test("shows durable preparation progress across refresh and opens the completed 
       exact: true,
     }),
   ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Seattle Mariners at Los Angeles Dodgers, view preparation",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Preparing pitch 2 of 4.", { exact: true }),
+  ).toBeVisible();
+  expect(preparationRequests).toBe(1);
   await page.reload();
   await expect(
     page.getByText("Preparing pitch 2 of 4.", { exact: true }),

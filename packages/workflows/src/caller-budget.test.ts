@@ -10,7 +10,7 @@ const timestamp = new Date("2026-09-12T18:00:00Z");
 
 describe("caller preparation budget", () => {
   it("counts distinct games and makes retries idempotent", async () => {
-    const storage = new MemoryStorage();
+    const storage = new MemoryStorage(undefined, () => timestamp.getTime());
     await expect(
       reserveCallerPreparation(storage, caller, "42", timestamp),
     ).resolves.toEqual({ allowed: true, alreadyReserved: false });
@@ -20,7 +20,7 @@ describe("caller preparation budget", () => {
   });
 
   it("atomically enforces the daily limit under concurrency", async () => {
-    const storage = new MemoryStorage();
+    const storage = new MemoryStorage(undefined, () => timestamp.getTime());
     const decisions = await Promise.all(
       Array.from({ length: callerPreparationLimits.dailyGames + 3 }, (_, i) =>
         reserveCallerPreparation(storage, caller, String(100 + i), timestamp),
@@ -37,7 +37,8 @@ describe("caller preparation budget", () => {
   });
 
   it("enforces the monthly limit across days", async () => {
-    const storage = new MemoryStorage();
+    let currentTime = timestamp;
+    const storage = new MemoryStorage(undefined, () => currentTime.getTime());
     for (let i = 0; i < callerPreparationLimits.monthlyGames; i++) {
       const day = new Date(
         Date.UTC(
@@ -46,11 +47,13 @@ describe("caller preparation budget", () => {
           1 + Math.floor(i / callerPreparationLimits.dailyGames),
         ),
       );
+      currentTime = day;
       expect(
         (await reserveCallerPreparation(storage, caller, String(i), day))
           .allowed,
       ).toBe(true);
     }
+    currentTime = timestamp;
     await expect(
       reserveCallerPreparation(
         storage,

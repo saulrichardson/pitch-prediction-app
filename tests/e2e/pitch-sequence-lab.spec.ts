@@ -38,6 +38,19 @@ test("a complete replay stays stable through reveal, navigation, refresh and res
     page.getByRole("region", { name: "At-bat summary" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Strikeout" })).toBeVisible();
+  await expect(page.locator(".action-dock .primary")).toHaveText(
+    "Choose another game",
+  );
+  await page.reload();
+  await expect(page.locator(".action-dock .primary")).toHaveText(
+    "Choose another game",
+  );
+  await page.getByRole("button", { name: "Choose another game" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Choose a game." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Return to replay" }).click();
+  await expect(page.locator(".pitch-progress")).toContainText("Pitch 4 / 4");
   await page.getByRole("button", { name: "Replay again" }).click();
   await expect(primary).toBeVisible();
   await expect(page.locator(".forecast")).toHaveText(forecast, {
@@ -174,7 +187,7 @@ test("small-screen controls stay reachable through reveal, details, and completi
   for (let index = 0; index < 4; index++) {
     await reveal.click();
     const next = page.getByRole("button", {
-      name: index === 3 ? "Replay again" : "Next pitch",
+      name: index === 3 ? "Choose another game" : "Next pitch",
       exact: true,
     });
     await expect(next).toBeEnabled();

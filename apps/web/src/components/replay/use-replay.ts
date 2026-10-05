@@ -36,7 +36,12 @@ function savePlace(id: string) {
   window.history.replaceState(null, "", url);
 }
 function message(error: unknown) {
-  if (error instanceof ReplayApiError && error.code === "replay_unavailable")
+  if (
+    error instanceof ReplayApiError &&
+    ["replay_unavailable", "edition_not_found", "invalid_replay"].includes(
+      error.code,
+    )
+  )
     return error.message;
   if (error instanceof ReplayApiError && error.status >= 500)
     return "The replay couldn’t be reached. Try again.";
@@ -66,6 +71,7 @@ export function useReplay() {
   const restore = useCallback(
     async (signal?: AbortSignal) => {
       const token = ++generation.current;
+      const isCurrent = () => !signal?.aborted && token === generation.current;
       const location = new URL(window.location.href);
       if (location.searchParams.get("browse") === "1") {
         setScreen({
@@ -76,20 +82,25 @@ export function useReplay() {
         setNotice(null);
         return;
       }
-      const id =
-        new URL(window.location.href).searchParams.get("replay") ??
-        remembered(placeKey);
+      const linkedId = location.searchParams.get("replay");
+      const id = linkedId ?? remembered(placeKey);
       try {
+        if (linkedId !== null && !/^[a-f0-9]{64}$/.test(linkedId))
+          throw new ReplayApiError(
+            400,
+            "invalid_replay",
+            "This replay link is invalid. Choose a game to continue.",
+          );
         if (id && /^[a-f0-9]{64}$/.test(id)) {
           try {
             const { replay } = await requestJson<{ replay: ReplayView }>(
               `/api/replays/${id}`,
               { signal },
             );
-            if (!signal?.aborted && token === generation.current)
-              accept(replay);
+            if (isCurrent()) accept(replay);
             return;
           } catch (error) {
+            if (!isCurrent()) return;
             if (!(error instanceof ReplayApiError && error.status === 404))
               throw error;
             try {
@@ -97,15 +108,16 @@ export function useReplay() {
                 "/api/replays",
                 { body: { editionId: id }, signal },
               );
-              if (!signal?.aborted && token === generation.current)
-                accept(replay);
+              if (isCurrent()) accept(replay);
               return;
             } catch (startError) {
+              if (!isCurrent()) return;
               if (!(
                 startError instanceof ReplayApiError &&
                 startError.status === 404
               ))
                 throw startError;
+              if (linkedId !== null) throw startError;
             }
             remember(placeKey, null);
             const url = new URL(window.location.href);
@@ -117,12 +129,12 @@ export function useReplay() {
           "/api/replays",
           { signal },
         );
-        if (!signal?.aborted && token === generation.current) {
+        if (isCurrent()) {
           setScreen({ kind: "intro", edition });
           setNotice(null);
         }
       } catch (error) {
-        if (!signal?.aborted && token === generation.current)
+        if (isCurrent())
           setScreen({ kind: "unavailable", message: message(error) });
       }
     },

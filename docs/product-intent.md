@@ -39,11 +39,14 @@ inference is publication work. It is never part of a replay command.
    forecast with two alternatives.
 3. Reveal the actual pitch on the same comparison surface.
 4. Advance to the next saved forecast.
-5. Finish the at-bat, see the result and match count, and replay if desired.
+5. Finish the at-bat, see the result and match count, and choose another game.
+   Restarting the same at-bat is a separate optional action in the recap.
 
 Each game keeps its own cursor and pending action when the user switches games.
-The main action changes from **Reveal pitch** to **Next pitch** to **Replay
-again**. Back reverses one replay step. Refresh restores the same place. A failed
+The main action changes from **Reveal pitch** to **Next pitch** to **Choose
+another game**. **Replay again** belongs to the completed recap so continuing
+does not repeatedly restart the same short sequence. Back reverses one replay
+step. Refresh restores the same place. A failed
 request has one retry action and preserves the last acknowledged view.
 
 ## Interface Principles

@@ -20,7 +20,9 @@ export const catalogGame: CatalogGame = {
   doubleheader: false,
 };
 const setup = () => {
-  const storage = new MemoryStorage();
+  let currentTime = timestamp;
+  const now = () => currentTime;
+  const storage = new MemoryStorage(undefined, () => now().getTime());
   const schedule = vi.fn(async () => [
     catalogGame,
     { ...catalogGame, gamePk: "44", status: "live" as const },
@@ -28,7 +30,10 @@ const setup = () => {
   return {
     storage,
     schedule,
-    service: catalogService({ storage, schedule, now: () => timestamp }),
+    service: catalogService({ storage, schedule, now }),
+    setTime: (value: Date) => {
+      currentTime = value;
+    },
   };
 };
 describe("catalog and preparation requests", () => {
@@ -138,8 +143,9 @@ describe("catalog and preparation requests", () => {
     expect(await storage.read(jobKey(catalogGame.gamePk))).toBeNull();
   });
   it("lets an interrupted job resume and keeps an in-flight game readable as the date window rolls", async () => {
-    const { storage, service } = setup();
+    const { storage, service, setTime } = setup();
     await service.request(catalogGame.gamePk, catalogGame.date, caller);
+    setTime(new Date("2026-09-12T18:11:00Z"));
     const later = catalogService({
       storage,
       schedule: vi.fn(async () => [catalogGame]),
@@ -156,6 +162,7 @@ describe("catalog and preparation requests", () => {
       (await storage.read<GamePreparationJob>(jobKey(catalogGame.gamePk)))!
         .value.requestId,
     ).not.toBe(previous.value.requestId);
+    setTime(new Date("2026-09-19T18:00:00Z"));
     const rolled = catalogService({
       storage,
       schedule: vi.fn(),
