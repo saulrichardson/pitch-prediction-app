@@ -568,23 +568,23 @@ summary::-webkit-details-marker {
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
-.pitch-steps {
-  display: flex;
-  justify-content: end;
-  gap: 5px;
-  margin-top: 10px;
-}
-.pitch-steps i {
-  width: 14px;
+.pitch-progress-bar {
+  display: block;
+  width: 110px;
   height: 3px;
+  margin-top: 10px;
+  appearance: none;
+  border: 0;
   background: var(--color-border);
-  border-radius: 2px;
-  transition: background 160ms var(--ease);
+  accent-color: var(--color-primary);
 }
-.pitch-steps i.past {
-  background: var(--color-forecast);
+.pitch-progress-bar::-webkit-progress-bar {
+  background: var(--color-border);
 }
-.pitch-steps i.current {
+.pitch-progress-bar::-webkit-progress-value {
+  background: var(--color-primary);
+}
+.pitch-progress-bar::-moz-progress-bar {
   background: var(--color-primary);
 }
 .replay-stage {
@@ -1352,12 +1352,6 @@ meter::-moz-meter-bar {
   }
   .pitch-progress {
     font-size: 12px;
-  }
-  .pitch-steps {
-    gap: 4px;
-  }
-  .pitch-steps i {
-    width: 9px;
   }
   .replay-stage {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

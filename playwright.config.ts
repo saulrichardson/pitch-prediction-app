@@ -10,12 +10,12 @@ export default defineConfig({
   webServer: {
     command:
       "npm run fixture:replay && npm --workspace @pitch/web run dev -- --hostname 127.0.0.1 --port 3100",
-    url: "http://127.0.0.1:3100/ready",
+    url: "http://127.0.0.1:3100/",
     reuseExistingServer: false,
     env: {
       STORAGE_MODE: "memory",
       REPLAY_EDITION_PATH: path.resolve(".cache/test-edition.json"),
-      SESSION_SECRET: "local-e2e-session-secret",
+      SESSION_SECRET: "local-e2e-session-secret-at-least-32-characters",
     },
   },
   use: { baseURL: "http://127.0.0.1:3100", trace: "retain-on-failure" },

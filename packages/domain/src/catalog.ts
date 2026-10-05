@@ -5,22 +5,37 @@ import { gameDateSchema } from "./browser-contracts";
 export { gameDateSchema } from "./browser-contracts";
 
 export const gameIdSchema = z.string().regex(/^\d{1,10}$/);
-export const catalogDays = 7;
+export const supportedTeamId = 119;
+export const supportedGameCount = 10;
 
-/** MLB's official game dates follow the US baseball day, not the server's UTC day. */
-export function catalogWindow(now: Date) {
-  const end = new Intl.DateTimeFormat("en-CA", {
+/** MLB official dates use the baseball day in New York. */
+export function baseballDate(now: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(now);
-  const dates = Array.from({ length: catalogDays }, (_, offset) => {
-    const date = new Date(`${end}T12:00:00Z`);
-    date.setUTCDate(date.getUTCDate() - offset);
-    return date.toISOString().slice(0, 10);
-  });
-  return { start: dates.at(-1)!, end, dates };
+}
+
+/** Apply at ingestion and admission, including cached schedules. */
+export function supportedGames(games: CatalogGame[]): CatalogGame[] {
+  return games
+    .filter(
+      (game) =>
+        game.status === "complete" &&
+        (game.away.id === supportedTeamId || game.home.id === supportedTeamId),
+    )
+    .sort(
+      (a, b) =>
+        b.startsAt.localeCompare(a.startsAt) ||
+        Number(b.gamePk) - Number(a.gamePk),
+    )
+    .filter(
+      (game, index, all) =>
+        all.findIndex((other) => other.gamePk === game.gamePk) === index,
+    )
+    .slice(0, supportedGameCount);
 }
 
 const teamSchema = z.object({
@@ -114,7 +129,7 @@ export type GameAvailability =
     };
 
 export type GameCatalog = {
-  window: ReturnType<typeof catalogWindow>;
+  window: { start: string; end: string; dates: string[] };
   date: string;
   games: Array<CatalogGame & { replay: GameAvailability }>;
 };

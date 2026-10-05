@@ -20,6 +20,8 @@ import { PlayerPortrait, TeamMark, teamStyle } from "./replay/mlb-media";
 export default function PitchPredictionApp() {
   const app = useReplay();
   const replay = app.screen.kind === "ready" ? app.screen.replay : null;
+  const completionLabel =
+    replay?.edition.scope === "game" ? "Game complete" : "Preview complete";
   const identity = replay
     ? matchupIdentity(replay.edition.game.label, replay.current.preState.half)
     : null;
@@ -118,9 +120,7 @@ export default function PitchPredictionApp() {
           <div className="replay-heading">
             <div>
               <p className="eyebrow">
-                {replay.phase === "complete"
-                  ? "At-bat complete"
-                  : "At the plate"}
+                {replay.phase === "complete" ? completionLabel : "At the plate"}
               </p>
               <h1>
                 <span className="matchup-player">
@@ -147,23 +147,12 @@ export default function PitchPredictionApp() {
                 Pitch <strong>{replay.index + 1}</strong> /{" "}
                 {replay.edition.pitchCount}
               </span>
-              <div className="pitch-steps" aria-hidden="true">
-                {Array.from(
-                  { length: replay.edition.pitchCount },
-                  (_, index) => (
-                    <i
-                      key={index}
-                      className={
-                        index === replay.index
-                          ? "current"
-                          : index < replay.index
-                            ? "past"
-                            : ""
-                      }
-                    />
-                  ),
-                )}
-              </div>
+              <progress
+                className="pitch-progress-bar"
+                max={replay.edition.pitchCount * 2}
+                value={replay.step + 1}
+                aria-label="Game replay progress"
+              />
             </div>
           </div>
           <section
@@ -188,7 +177,7 @@ export default function PitchPredictionApp() {
               {app.notice ? (
                 <span className="connection-notice">{app.notice}</span>
               ) : replay.phase === "complete" ? (
-                <span className="sr-only">At-bat complete</span>
+                <span className="sr-only">{completionLabel}</span>
               ) : (
                 <span className="sr-only">
                   {replay.phase === "forecast"
@@ -222,7 +211,9 @@ export default function PitchPredictionApp() {
                 {app.needsRetry && !app.busy
                   ? "Try again"
                   : replay.phase === "complete"
-                    ? "Choose another game"
+                    ? replay.edition.scope === "game"
+                      ? "Choose another game"
+                      : "Choose a Dodgers game"
                     : replay.phase === "forecast"
                       ? "Reveal pitch"
                       : "Next pitch"}
@@ -231,9 +222,16 @@ export default function PitchPredictionApp() {
             </div>
           </div>
           {replay.summary ? (
-            <section className="replay-summary" aria-label="At-bat summary">
+            <section
+              className="replay-summary"
+              aria-label={
+                replay.edition.scope === "game"
+                  ? "Game summary"
+                  : "At-bat summary"
+              }
+            >
               <div>
-                <p className="eyebrow">At-bat complete</p>
+                <p className="eyebrow">{completionLabel}</p>
                 <h2>{replay.summary.outcome}</h2>
                 <button
                   className="text-button"
@@ -309,8 +307,8 @@ function About() {
       <div>
         <strong>Pitch Prediction</strong>
         <p>
-          Real MLB at-bats, read pitch by pitch. Forecasts are generated with
-          the xLSTM model and saved as a complete replay.
+          Full MLB games, read pitch by pitch. Forecasts are generated with the
+          xLSTM model and saved as a complete replay.
         </p>
         <a
           href="https://huggingface.co/baseball-analytica/pitchpredict-xlstm"
@@ -455,7 +453,14 @@ function Bases({ bases }: { bases: BaseState }) {
   );
 }
 function Scoreboard({ replay }: { replay: ReplayView }) {
-  const state = replay.current.preState;
+  const state =
+    replay.phase === "complete" && replay.edition.scope === "game"
+      ? {
+          ...replay.actual!.postState,
+          awayScore: replay.summary!.finalScore.away,
+          homeScore: replay.summary!.finalScore.home,
+        }
+      : replay.current.preState;
   const { away, home } = matchupIdentity(replay.edition.game.label, state.half);
   return (
     <header className="scoreboard">

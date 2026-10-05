@@ -45,7 +45,11 @@ describe("MLB live feed normalization", () => {
                     strikeZoneWidth: 17,
                     strikeZoneDepth: 8.5,
                     coordinates: { pX: 0.1, pZ: 2.6 },
-                    breaks: { breakHorizontal: 7.5, breakVertical: -12.1 },
+                    breaks: {
+                      breakHorizontal: 7.5,
+                      breakVertical: -12.1,
+                      spinRate: 2431,
+                    },
                   },
                 },
               ],
@@ -139,6 +143,7 @@ describe("MLB live feed normalization", () => {
     expect(replay.pitches).toHaveLength(4);
     expect(replay.pitches[0]).toMatchObject({
       pitchType: "FF",
+      shape: { spin: 2431 },
       result: "called_strike",
       location: {
         strikeZone: {
@@ -396,3 +401,153 @@ function pitchEvent(
     },
   };
 }
+
+it("applies indexed steals, automatic counts and runs before the next pitch without restoring earlier bases", () => {
+  const replay = normalizeMlbLiveFeed({
+    gamePk: 1001,
+    gameData: {
+      datetime: { officialDate: "2026-10-04" },
+      status: { detailedState: "Final" },
+      teams: {},
+    },
+    liveData: {
+      plays: {
+        allPlays: [
+          {
+            about: { atBatIndex: 0, inning: 1, halfInning: "top" },
+            matchup: matchup(),
+            count: { outs: 0 },
+            result: { awayScore: 0, homeScore: 0 },
+            runners: [{ movement: { start: null, end: "1B", isOut: false } }],
+            playEvents: [
+              pitchEvent(
+                "X",
+                "Single",
+                "FF",
+                { balls: 0, strikes: 0, outs: 0 },
+                true,
+              ),
+            ],
+          },
+          {
+            about: { atBatIndex: 1, inning: 1, halfInning: "top" },
+            matchup: matchup({ batterId: 21 }),
+            count: { outs: 1 },
+            result: { awayScore: 1, homeScore: 0 },
+            runners: [
+              {
+                details: { playIndex: 0 },
+                movement: { start: "1B", end: "2B", isOut: false },
+              },
+              {
+                details: { playIndex: 2 },
+                movement: { start: "2B", end: "score", isOut: false },
+              },
+            ],
+            playEvents: [
+              {
+                index: 0,
+                isPitch: false,
+                count: { balls: 1, strikes: 0, outs: 0 },
+              },
+              {
+                ...pitchEvent("C", "Called strike", "FF", {
+                  balls: 1,
+                  strikes: 1,
+                  outs: 0,
+                }),
+                index: 1,
+              },
+              {
+                index: 2,
+                isPitch: false,
+                count: { balls: 1, strikes: 1, outs: 0 },
+              },
+              {
+                ...pitchEvent(
+                  "X",
+                  "Flyout",
+                  "FF",
+                  { balls: 1, strikes: 1, outs: 1 },
+                  true,
+                ),
+                index: 3,
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(replay.pitches[1]).toMatchObject({
+    id: "1001-1",
+    preState: {
+      count: { balls: 1, strikes: 0 },
+      bases: { first: false, second: true, third: false },
+      awayScore: 0,
+    },
+  });
+  expect(replay.pitches[2].preState).toMatchObject({
+    awayScore: 1,
+    bases: { first: false, second: false, third: false },
+  });
+  expect(replay.pitches[2].postState.bases).toEqual({
+    first: false,
+    second: false,
+    third: false,
+  });
+});
+
+it("places the extra-inning runner before forecasting the first pitch", () => {
+  const replay = normalizeMlbLiveFeed({
+    gamePk: 823164,
+    gameData: {},
+    liveData: {
+      plays: {
+        allPlays: [
+          {
+            about: { atBatIndex: 71, inning: 10, halfInning: "top" },
+            matchup: matchup(),
+            count: { outs: 1 },
+            result: { awayScore: 1, homeScore: 1 },
+            playEvents: [
+              {
+                isPitch: false,
+                index: 0,
+                details: {
+                  eventType: "runner_placed",
+                  awayScore: 1,
+                  homeScore: 1,
+                },
+                base: 2,
+              },
+              {
+                ...pitchEvent(
+                  "X",
+                  "Groundout",
+                  "FF",
+                  { balls: 0, strikes: 0, outs: 1 },
+                  true,
+                ),
+                index: 1,
+              },
+            ],
+            runners: [
+              {
+                details: { playIndex: 1 },
+                movement: { start: null, end: null, isOut: true },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(replay.pitches[0].preState).toMatchObject({
+    inning: 10,
+    bases: { first: false, second: true, third: false },
+    awayScore: 1,
+    homeScore: 1,
+  });
+  expect(replay.pitches[0].postState.bases.second).toBe(true);
+});

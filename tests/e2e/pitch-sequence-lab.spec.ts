@@ -35,9 +35,11 @@ test("a complete replay stays stable through reveal, navigation, refresh and res
     if (i < 3) await next.click();
   }
   await expect(
-    page.getByRole("region", { name: "At-bat summary" }),
+    page.getByRole("region", { name: "Game summary" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Strikeout" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "ATL @ LAD · 3–2" }),
+  ).toBeVisible();
   await expect(page.locator(".action-dock .primary")).toHaveText(
     "Choose another game",
   );
@@ -210,4 +212,50 @@ test("small-screen controls stay reachable through reveal, details, and completi
   await page.getByRole("button", { name: "Replay again", exact: true }).click();
   await expect(reveal).toBeEnabled();
   expect(Math.abs((await reveal.boundingBox())!.y - initial.y)).toBeLessThan(2);
+});
+
+test("plays through all nine innings, passing short at-bats without completing", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto(`/?replay=${"d".repeat(64)}`);
+  const reveal = page.getByRole("button", {
+    name: "Reveal pitch",
+    exact: true,
+  });
+  const next = page.getByRole("button", { name: "Next pitch", exact: true });
+  for (let index = 0; index < 72; index++) {
+    await expect(page.locator(".pitch-progress")).toContainText(
+      `Pitch ${index + 1} / 72`,
+    );
+    await reveal.click();
+    if (index < 71) {
+      await expect(
+        page.getByRole("region", { name: "Game summary" }),
+      ).toHaveCount(0);
+      await next.click();
+    }
+    if (index === 6) {
+      await page.reload();
+      await expect(page.locator(".pitch-progress")).toContainText(
+        "Pitch 8 / 72",
+      );
+    }
+  }
+  await expect(
+    page.getByRole("region", { name: "Game summary" }),
+  ).toBeVisible();
+  await expect(page.locator(".game-context")).toContainText("9");
+  await expect(
+    page.getByRole("button", { name: "Choose another game", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.reload();
+  await expect(
+    page.getByRole("region", { name: "Game summary" }),
+  ).toBeVisible();
 });

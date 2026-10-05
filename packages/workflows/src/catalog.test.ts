@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryStorage } from "../../db/src/storage/memory";
 import { fixtureEdition } from "../../../tests/fixtures/replay";
 import { catalogService } from "./catalog";
-import { indexGameEdition } from "./preparation";
+import { indexGameEdition, preparationLimits } from "./preparation";
 import { jobKey, type GamePreparationJob } from "./job";
-import type { CatalogGame } from "@pitch/domain";
+import { replayContract, type CatalogGame } from "@pitch/domain";
 
 const timestamp = new Date("2026-09-12T18:00:00Z");
 const caller = "b".repeat(64);
@@ -13,7 +13,7 @@ export const catalogGame: CatalogGame = {
   date: "2026-09-12",
   startsAt: "2026-09-12T17:00:00Z",
   away: { id: 1, abbreviation: "NYM", name: "New York Mets" },
-  home: { id: 2, abbreviation: "NYY", name: "New York Yankees" },
+  home: { id: 119, abbreviation: "LAD", name: "Los Angeles Dodgers" },
   status: "complete",
   statusLabel: "Final",
   gameNumber: 1,
@@ -30,7 +30,7 @@ const setup = () => {
   return {
     storage,
     schedule,
-    service: catalogService({ storage, schedule, now }),
+    service: catalogService({ storage, recentGames: schedule, now }),
     setTime: (value: Date) => {
       currentTime = value;
     },
@@ -50,7 +50,7 @@ describe("catalog and preparation requests", () => {
     });
     await expect(
       service.request("44", catalogGame.date, caller),
-    ).rejects.toMatchObject({ code: "game_not_complete" });
+    ).rejects.toMatchObject({ code: "game_not_found" });
     await expect(
       service.request("999", catalogGame.date, caller),
     ).rejects.toMatchObject({ code: "game_not_found" });
@@ -77,7 +77,10 @@ describe("catalog and preparation requests", () => {
       {
         key: "preparation-budget:2026-09",
         revision: 0,
-        value: { total: 60, days: { "2026-09-12": 60 } },
+        value: {
+          total: preparationLimits.dailyAttempts,
+          days: { "2026-09-12": preparationLimits.dailyAttempts },
+        },
       },
       null,
     );
@@ -117,6 +120,8 @@ describe("catalog and preparation requests", () => {
   it("lists validated saved editions without reading large prediction records or consuming inference", async () => {
     const { service, storage } = setup();
     const edition = fixtureEdition();
+    edition.contract = replayContract;
+    edition.totalPitches = edition.pitches.length;
     edition.game.gamePk = catalogGame.gamePk;
     const dates = catalogGame.date;
     edition.game.officialDate = dates;
@@ -148,7 +153,7 @@ describe("catalog and preparation requests", () => {
     setTime(new Date("2026-09-12T18:11:00Z"));
     const later = catalogService({
       storage,
-      schedule: vi.fn(async () => [catalogGame]),
+      recentGames: vi.fn(async () => [catalogGame]),
       now: () => new Date("2026-09-12T18:11:00Z"),
     });
     expect(
@@ -165,14 +170,39 @@ describe("catalog and preparation requests", () => {
     setTime(new Date("2026-09-19T18:00:00Z"));
     const rolled = catalogService({
       storage,
-      schedule: vi.fn(),
+      recentGames: async () => [],
       now: () => new Date("2026-09-19T18:00:00Z"),
     });
-    expect(
-      (await rolled.status(catalogGame.gamePk, catalogGame.date)).game.gamePk,
-    ).toBe(catalogGame.gamePk);
     await expect(
       rolled.request(catalogGame.gamePk, catalogGame.date, caller),
-    ).rejects.toMatchObject({ code: "date_out_of_range" });
+    ).rejects.toMatchObject({ code: "game_not_found" });
+  });
+  it("rejects non-Dodgers and an eleventh older game before charging or queuing work", async () => {
+    const storage = new MemoryStorage();
+    const games = Array.from({ length: 11 }, (_, i) => ({
+      ...catalogGame,
+      gamePk: String(100 + i),
+      startsAt: `2026-09-${String(i + 1).padStart(2, "0")}T23:00:00Z`,
+    }));
+    const service = catalogService({
+      storage,
+      recentGames: async () => [
+        ...games,
+        {
+          ...catalogGame,
+          gamePk: "200",
+          home: { id: 147, abbreviation: "NYY", name: "Yankees" },
+        },
+      ],
+      now: () => timestamp,
+    });
+    expect((await service.list()).games).toHaveLength(10);
+    for (const id of ["100", "200"]) {
+      await expect(
+        service.request(id, catalogGame.date, caller),
+      ).rejects.toMatchObject({ code: "game_not_found" });
+      expect(await storage.read(jobKey(id))).toBeNull();
+    }
+    expect(await storage.read("preparation-budget:2026-09")).toBeNull();
   });
 });

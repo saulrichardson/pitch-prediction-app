@@ -84,3 +84,38 @@ def test_decoder_rejects_a_reused_or_changed_prefix(model, change):
             tokens = tokens[:, :5]
         with pytest.raises(ValueError, match='append exactly one|change its history'):
             decoder(tokens, context)
+
+
+@pytest.mark.parametrize("prefix", [2, 82, 257])
+def test_identical_sample_prefix_is_computed_once_then_branches_normally(model, prefix):
+    tokens, context = inputs(8, prefix + 15)
+    tokens[:, :prefix] = tokens[:1, :prefix].expand(8, -1).clone()
+    decoder = IncrementalPitchDecoder(model).eval()
+    batches = []
+    hook = model.token_embed.register_forward_pre_hook(lambda _module, args: batches.append(args[0].shape[0]))
+    try:
+        with torch.no_grad():
+            for length in range(prefix, prefix + 16):
+                current = PackedPitchContext(*(x[:, :length] for x in context))
+                expected = model(tokens[:, :length], current)[:, -1:]
+                actual = decoder(tokens[:, :length], current)
+                torch.testing.assert_close(actual, expected, atol=2e-5, rtol=2e-5)
+        assert batches[:4] == [8, 1, 8, 8]
+    finally:
+        hook.remove()
+
+
+def test_equal_tokens_with_different_context_do_not_share_prefix(model):
+    tokens, context = inputs(8, 32)
+    tokens[:] = tokens[:1].expand(8, -1).clone()
+    context.batter_id[1, 0] += 1
+    batches = []
+    hook = model.token_embed.register_forward_pre_hook(lambda _module, args: batches.append(args[0].shape[0]))
+    try:
+        with torch.no_grad():
+            actual = IncrementalPitchDecoder(model).eval()(tokens, context)
+            expected = model(tokens, context)[:, -1:]
+        torch.testing.assert_close(actual, expected, atol=2e-5, rtol=2e-5)
+        assert batches == [8, 8]
+    finally:
+        hook.remove()

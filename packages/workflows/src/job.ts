@@ -8,6 +8,7 @@ export type GamePreparationJob = {
   completed: number;
   total: number | null;
   model?: ModelIdentity;
+  sourceKey?: string;
 } & (
   | { status: "queued" | "preparing" }
   | { status: "ready"; editionId: string }

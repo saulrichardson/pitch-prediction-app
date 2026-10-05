@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Storage } from "@pitch/db";
 import {
-  catalogWindow,
+  baseballDate,
+  supportedGames,
   gameDateSchema,
   gameIdSchema,
   type CatalogGame,
@@ -32,25 +33,13 @@ export class CatalogError extends Error {
 
 export function catalogService(input: {
   storage: Storage;
-  schedule: (date: string) => Promise<CatalogGame[]>;
+  recentGames: () => Promise<CatalogGame[]>;
   now?: () => Date;
 }) {
   const { storage } = input;
   const now = input.now ?? (() => new Date());
-  function validateDate(date: string) {
-    if (
-      !gameDateSchema.safeParse(date).success ||
-      !catalogWindow(now()).dates.includes(date)
-    )
-      throw new CatalogError(
-        400,
-        "date_out_of_range",
-        "Choose a date from the last seven days.",
-      );
-  }
-  async function schedule(date: string) {
-    validateDate(date);
-    const key = `schedule:${date}`;
+  async function schedule() {
+    const key = "schedule:dodgers-recent-v1";
     const cached = await storage.read<{
       fetchedAt: string;
       games: CatalogGame[];
@@ -59,10 +48,10 @@ export function catalogService(input: {
       cached &&
       now().getTime() - Date.parse(cached.value.fetchedAt) < 120_000
     )
-      return cached.value.games;
+      return supportedGames(cached.value.games);
     let games: CatalogGame[];
     try {
-      games = await input.schedule(date);
+      games = supportedGames(await input.recentGames());
     } catch {
       throw new CatalogError(
         503,
@@ -86,7 +75,7 @@ export function catalogService(input: {
       editionId: string;
       summary: EditionSummary;
     }>(gameEditionKey(gamePk));
-    if (index) {
+    if (index?.value.summary.scope === "game") {
       if (
         index.value.summary.game.gamePk !== gamePk ||
         index.value.summary.id !== index.value.editionId
@@ -111,61 +100,80 @@ export function catalogService(input: {
         retryAt: job.retryAt,
         retryable: job.retryable,
       };
-    if (job.status === "ready")
+    if (job.status === "ready") {
+      if (index) return { status: "available" };
       throw new Error("Prepared game has no edition index.");
+    }
     return { status: job.status, completed: job.completed, total: job.total };
   }
   async function game(gamePk: string, date: string) {
     if (!gameIdSchema.safeParse(gamePk).success)
       throw new CatalogError(400, "invalid_game", "Choose a listed MLB game.");
-    const found = (await schedule(date)).find((item) => item.gamePk === gamePk);
+    if (!gameDateSchema.safeParse(date).success)
+      throw new CatalogError(
+        400,
+        "invalid_date",
+        "Choose a date from the game list.",
+      );
+    const found = (await schedule()).find(
+      (item) => item.gamePk === gamePk && item.date === date,
+    );
     if (!found)
       throw new CatalogError(
         404,
         "game_not_found",
-        "This game is not on the selected date.",
+        "Choose one of the Dodgers’ ten most recent completed games.",
       );
     return found;
   }
   return {
-    async list(date = catalogWindow(now()).end): Promise<GameCatalog> {
-      const games = await schedule(date);
-      const editions =
-        (
-          await storage.read<Record<string, EditionSummary>>(
-            catalogEditionsKey(date),
-          )
-        )?.value ?? {};
+    async list(date?: string): Promise<GameCatalog> {
+      const games = await schedule();
+      const dates = [...new Set(games.map((game) => game.date))]
+        .sort()
+        .reverse();
+      if (
+        date &&
+        (!gameDateSchema.safeParse(date).success || !dates.includes(date))
+      )
+        throw new CatalogError(
+          400,
+          "date_out_of_range",
+          "Choose a date from the Dodgers game list.",
+        );
+      const editions = Object.assign(
+        {},
+        ...(await Promise.all(
+          dates.map(
+            async (day) =>
+              (
+                await storage.read<Record<string, EditionSummary>>(
+                  catalogEditionsKey(day),
+                )
+              )?.value ?? {},
+          ),
+        )),
+      ) as Record<string, EditionSummary>;
+      const end = dates[0] ?? baseballDate(now());
       return {
-        window: catalogWindow(now()),
-        date,
-        games: games.map((item) => ({
-          ...item,
-          replay:
-            item.status === "complete" && editions[item.gamePk]
-              ? { status: "ready" as const, edition: editions[item.gamePk] }
-              : { status: "available" as const },
-        })),
+        window: { start: dates.at(-1) ?? end, end, dates },
+        date: date ?? end,
+        games: games
+          .filter((item) => !date || item.date === date)
+          .map((item) => ({
+            ...item,
+            replay:
+              editions[item.gamePk]?.scope === "game"
+                ? { status: "ready" as const, edition: editions[item.gamePk] }
+                : { status: "available" as const },
+          })),
       };
     },
     async status(gamePk: string, date: string) {
-      if (
-        gameIdSchema.safeParse(gamePk).success &&
-        gameDateSchema.safeParse(date).success &&
-        date < catalogWindow(now()).start
-      ) {
-        const cached = await storage.read<{ games: CatalogGame[] }>(
-          `schedule:${date}`,
-        );
-        const selected = cached?.value.games.find(
-          (item) => item.gamePk === gamePk,
-        );
-        const replay = await availability(gamePk);
-        if (selected && replay.status !== "available")
-          return { game: selected, replay };
-      }
-      const selected = await game(gamePk, date);
-      return { game: selected, replay: await availability(gamePk) };
+      return {
+        game: await game(gamePk, date),
+        replay: await availability(gamePk),
+      };
     },
     async request(gamePk: string, date: string, callerId: string) {
       const selected = await game(gamePk, date);
@@ -222,6 +230,9 @@ export function catalogService(input: {
         updatedAt: timestamp,
         completed: previous?.value.completed ?? 0,
         total: previous?.value.total ?? null,
+        ...(previous?.value.sourceKey
+          ? { sourceKey: previous.value.sourceKey }
+          : {}),
         ...(previous?.value.model ? { model: previous.value.model } : {}),
         ...(budget.limited
           ? {

@@ -1,6 +1,6 @@
 import {
   buildPredictionRequest,
-  replayContract,
+  legacyReplayContract,
   type ReplayEdition,
   type PitchEvent,
   type GameState,
@@ -94,7 +94,7 @@ export function fixturePrediction(index = 0): PredictionResponse {
 export function fixtureEdition(): ReplayEdition {
   return {
     id: "a".repeat(64),
-    contract: replayContract,
+    contract: legacyReplayContract,
     game: {
       gamePk: "fixture",
       label: "NYM @ MIA",
@@ -114,6 +114,61 @@ export function fixtureEdition(): ReplayEdition {
         currentPitch: actual,
         history: pitches.slice(0, index),
         gameDate: "2026-09-09",
+      }),
+      prediction: fixturePrediction(index),
+    })),
+  };
+}
+
+/** Nine innings, both halves, distinct matchups and a relief pitcher. */
+export function fixtureGameEdition(innings = 9): ReplayEdition {
+  const edition = fixtureEdition();
+  const actuals = Array.from({ length: innings * 2 }, (_, halfIndex) =>
+    pitches.map((source, index) => {
+      const pitch = structuredClone(source);
+      const gameIndex = halfIndex * pitches.length + index;
+      pitch.id = `game-fixture-${gameIndex}`;
+      pitch.paId = `game-fixture-pa-${halfIndex}`;
+      pitch.gamePitchIndex = gameIndex;
+      const frame = {
+        inning: Math.floor(halfIndex / 2) + 1,
+        half: halfIndex % 2 ? ("bottom" as const) : ("top" as const),
+      };
+      pitch.preState = {
+        ...pitch.preState,
+        ...frame,
+        outs: 2,
+        awayScore: halfIndex > 2 ? 3 : 0,
+        homeScore: halfIndex > 6 ? 2 : 0,
+      };
+      pitch.postState = {
+        ...pitch.postState,
+        ...frame,
+        outs: index === pitches.length - 1 ? 3 : 2,
+        awayScore: pitch.preState.awayScore,
+        homeScore: pitch.preState.homeScore,
+      };
+      pitch.matchup = {
+        ...pitch.matchup,
+        batterId: `${1000 + halfIndex}`,
+        batterName: `Batter ${halfIndex + 1}`,
+        pitcherId: `${2000 + (halfIndex % 2) + (halfIndex >= 12 ? 2 : 0)}`,
+        pitcherName: `${halfIndex >= 12 ? "Relief" : "Starting"} pitcher ${(halfIndex % 2) + 1}`,
+      };
+      return pitch;
+    }),
+  ).flat();
+  return {
+    ...edition,
+    id: "d".repeat(64),
+    contract: "prepared-game-v2",
+    totalPitches: actuals.length,
+    pitches: actuals.map((actual, index) => ({
+      actual,
+      request: buildPredictionRequest({
+        currentPitch: actual,
+        history: actuals.slice(0, index),
+        gameDate: edition.game.officialDate,
       }),
       prediction: fixturePrediction(index),
     })),

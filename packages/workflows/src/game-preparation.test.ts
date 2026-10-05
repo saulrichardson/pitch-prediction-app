@@ -11,7 +11,7 @@ import type { CatalogGame } from "@pitch/domain";
 
 const caller = "c".repeat(64);
 
-function setup() {
+function setup(batchSize = Infinity) {
   const edition = fixtureEdition();
   edition.game.gamePk = "42";
   let timestamp = new Date("2026-09-12T18:00:00Z");
@@ -22,7 +22,7 @@ function setup() {
     date: edition.game.officialDate,
     startsAt: "2026-09-09T23:00:00Z",
     away: { id: 1, abbreviation: "NYM", name: "Mets" },
-    home: { id: 2, abbreviation: "MIA", name: "Marlins" },
+    home: { id: 119, abbreviation: "LAD", name: "Dodgers" },
     gameNumber: 1,
     doubleheader: false,
     status: "complete",
@@ -30,7 +30,7 @@ function setup() {
   };
   const service = catalogService({
     storage,
-    schedule: async () => [game],
+    recentGames: async () => [game],
     now,
   });
   const predict = vi.fn(async () => fixturePrediction());
@@ -46,6 +46,7 @@ function setup() {
     resolveModel,
     predict,
     now,
+    shouldYield: () => predict.mock.calls.length >= batchSize,
   });
   const job = async () =>
     (await storage.read<GamePreparationJob>(jobKey("42")))!.value;
@@ -130,5 +131,33 @@ describe("durable game preparation", () => {
     await Promise.all([s.run("42", id), s.run("42", id)]);
     expect(s.predict).toHaveBeenCalledTimes(4);
     expect((await s.job()).status).toBe("ready");
+  });
+  it("continues a whole game across worker invocations without repeating forecasts or reloading MLB", async () => {
+    const s = setup(2);
+    await s.service.request("42", s.edition.game.officialDate, caller);
+    const requestId = (await s.job()).requestId;
+    await s.run("42", requestId);
+    expect(await s.job()).toMatchObject({
+      status: "queued",
+      completed: 2,
+      total: 4,
+      model: s.model,
+    });
+    expect(await s.storage.read("game-edition:42")).toBeNull();
+    const finish = gamePreparationWorker({
+      storage: s.storage,
+      loadGame: s.loadGame,
+      resolveModel: s.resolveModel,
+      predict: s.predict,
+    });
+    await finish("42", requestId);
+    expect(await s.job()).toMatchObject({
+      status: "ready",
+      completed: 4,
+      total: 4,
+    });
+    expect(s.predict).toHaveBeenCalledTimes(4);
+    expect(s.loadGame).toHaveBeenCalledTimes(1);
+    expect(s.resolveModel).toHaveBeenCalledTimes(1);
   });
 });

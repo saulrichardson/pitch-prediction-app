@@ -37,7 +37,7 @@ test("a preparation rejection remains visible after the selected game loads", as
 test("a missing replay stays explicit instead of opening an unrelated feature", async ({
   page,
 }) => {
-  for (const id of ["d".repeat(64), "not-a-replay"]) {
+  for (const id of ["e".repeat(64), "not-a-replay"]) {
     await page.goto(`/?replay=${id}`);
     await expect(
       page.getByRole("heading", { name: "Replay unavailable." }),
@@ -56,7 +56,7 @@ test("a missing replay stays explicit instead of opening an unrelated feature", 
 test("a late missing-session response cannot replace a newly opened game", async ({
   page,
 }) => {
-  const missing = "d".repeat(64);
+  const missing = "e".repeat(64);
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
@@ -132,7 +132,7 @@ test("keeps an interrupted command with its game while another game is played", 
   await page.getByRole("button", { name: "Games", exact: true }).click();
   await page
     .getByRole("button", {
-      name: "New York Mets at Miami Marlins, open replay",
+      name: "Atlanta Braves at Los Angeles Dodgers, open replay",
       exact: true,
     })
     .click();
@@ -174,7 +174,7 @@ test("switches teams and dates while preserving each game's replay cursor", asyn
   await page.getByRole("button", { name: "Games", exact: true }).click();
   await page
     .getByRole("button", {
-      name: "New York Mets at Miami Marlins, open replay",
+      name: "Atlanta Braves at Los Angeles Dodgers, open replay",
       exact: true,
     })
     .click();
@@ -185,82 +185,51 @@ test("switches teams and dates while preserving each game's replay cursor", asyn
     useInnerText: true,
   });
   await page.getByRole("button", { name: "Games", exact: true }).click();
-  const catalog = (await (
-    await page.request.get("/api/games")
-  ).json()) as GameCatalog;
-  const yesterday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(`${catalog.window.dates[1]}T12:00:00Z`));
-  await page.getByRole("button", { name: yesterday, exact: true }).click();
   await page
     .getByRole("button", {
-      name: "Boston Red Sox at New York Yankees, open replay",
+      name: "Los Angeles Dodgers at San Francisco Giants, open replay",
       exact: true,
     })
     .click();
   await expect(page).toHaveURL(/replay=c{64}/);
 });
 
-test("shows seven days, empty dates, doubleheaders, and unselectable live games without overflow", async ({
+test("shows only ten completed Dodgers games and rejects unsupported requests", async ({
   page,
 }) => {
   await page.goto("/?browse=1");
-  await expect(page.locator(".date-strip button")).toHaveCount(7);
-  await expect(
-    page.getByRole("button", {
-      name: "Seattle Mariners at Los Angeles Dodgers, In Progress",
-      exact: true,
-    }),
-  ).toBeDisabled();
-  await expect(
-    page.getByRole("button", {
-      name: "Seattle Mariners at Los Angeles Dodgers, game 2, prepare replay",
-      exact: true,
-    }),
-  ).toBeEnabled();
+  await expect(page.locator(".game-list .game-row")).toHaveCount(10);
+  await expect(page.getByRole("button", { name: /In Progress/ })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: /New York Mets/ })).toHaveCount(
+    0,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.locator(".date-strip button").first().click();
-  await expect(
-    page.getByRole("heading", { name: "No games on this date." }),
-  ).toBeVisible();
+  const catalog = (await (
+    await page.request.get("/api/games")
+  ).json()) as GameCatalog;
+  expect(
+    catalog.games.every((game) => game.away.id === 119 || game.home.id === 119),
+  ).toBe(true);
+  expect(
+    (
+      await page.request.post("/api/games/900099", {
+        data: { date: catalog.date },
+        headers: { origin: "http://127.0.0.1:3100" },
+      })
+    ).status(),
+  ).toBe(404);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "No games on this date." }),
-  ).toBeVisible();
-  await page.locator(".date-strip button").last().click();
-  await expect(
-    page.getByRole("button", {
-      name: "New York Mets at Miami Marlins, open replay",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page.goto("/?browse=1&date=not-a-date");
-  await expect(
-    page
-      .getByRole("region", { name: "Game browser", exact: true })
-      .getByRole("alert"),
-  ).toContainText("Choose a date from the last seven days.");
-  await page
-    .getByRole("button", { name: "Show this week", exact: true })
-    .click();
-  await expect(page.locator(".date-strip button")).toHaveCount(7);
+  await expect(page.locator(".game-list .game-row")).toHaveCount(10);
   await page.goto("/?browse=1&game=not-a-game");
   await expect(
     page.getByRole("region", { name: "Selected game", exact: true }),
   ).toContainText("Choose a listed MLB game.");
-  await page
-    .getByRole("button", { name: "Back to games", exact: true })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Selected game", exact: true }),
-  ).not.toBeVisible();
 });
 
 test("shows durable preparation progress across refresh and opens the completed replay", async ({
@@ -301,14 +270,9 @@ test("shows durable preparation progress across refresh and opens the completed 
     });
   });
   await page.goto("/?browse=1");
-  await page
-    .getByRole("button", {
-      name: "Seattle Mariners at Los Angeles Dodgers, prepare replay",
-      exact: true,
-    })
-    .click();
+  await page.locator('[data-game-id="900002"]').click();
   await expect(
-    page.getByText("Preparing pitch 2 of 4.", { exact: true }),
+    page.getByText("Preparing the full game: pitch 2 of 4.", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -323,12 +287,12 @@ test("shows durable preparation progress across refresh and opens the completed 
     })
     .click();
   await expect(
-    page.getByText("Preparing pitch 2 of 4.", { exact: true }),
+    page.getByText("Preparing the full game: pitch 2 of 4.", { exact: true }),
   ).toBeVisible();
   expect(preparationRequests).toBe(1);
   await page.reload();
   await expect(
-    page.getByText("Preparing pitch 2 of 4.", { exact: true }),
+    page.getByText("Preparing the full game: pitch 2 of 4.", { exact: true }),
   ).toBeVisible();
   ready = true;
   await expect(

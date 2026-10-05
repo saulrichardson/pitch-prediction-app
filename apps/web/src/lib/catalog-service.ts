@@ -1,11 +1,18 @@
 import { getStorage } from "@pitch/db";
-import { catalogService, getSchedule, CatalogError } from "@pitch/workflows";
+import {
+  catalogService,
+  getRecentDodgersGames,
+  CatalogError,
+} from "@pitch/workflows";
 import { HttpError } from "./http";
 import { getReplayService } from "./replay-service";
 
 export async function getCatalogService() {
   await getReplayService();
-  return catalogService({ storage: getStorage(), schedule: getSchedule });
+  return catalogService({
+    storage: getStorage(),
+    recentGames: getRecentDodgersGames,
+  });
 }
 
 export function catalogHttpError(error: unknown) {

@@ -1,11 +1,16 @@
 import { writeFile, mkdir } from "node:fs/promises";
-import { fixtureEdition } from "../tests/fixtures/replay";
+import { fixtureEdition, fixtureGameEdition } from "../tests/fixtures/replay";
 import {
-  catalogWindow,
+  baseballDate,
+  replayContract,
   buildPredictionRequest,
   type CatalogGame,
 } from "@pitch/domain";
-const dates = catalogWindow(new Date()).dates;
+const dates = Array.from({ length: 10 }, (_, i) => {
+  const d = new Date(`${baseballDate(new Date())}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - i);
+  return d.toISOString().slice(0, 10);
+});
 function makeEdition(
   id: string,
   gamePk: string,
@@ -16,6 +21,8 @@ function makeEdition(
 ) {
   const edition = fixtureEdition();
   edition.id = id.repeat(64);
+  edition.contract = replayContract;
+  edition.totalPitches = edition.pitches.length;
   edition.game = {
     ...edition.game,
     gamePk,
@@ -38,9 +45,9 @@ const featured = makeEdition(
   "a",
   "900001",
   dates[0],
-  "NYM @ MIA",
-  "New York Mets",
-  "Miami Marlins",
+  "ATL @ LAD",
+  "Atlanta Braves",
+  "Los Angeles Dodgers",
 );
 const second = makeEdition(
   "b",
@@ -54,13 +61,17 @@ const yesterday = makeEdition(
   "c",
   "900005",
   dates[1],
-  "BOS @ NYY",
-  "Boston Red Sox",
-  "New York Yankees",
+  "LAD @ SF",
+  "Los Angeles Dodgers",
+  "San Francisco Giants",
 );
+const fullGame = fixtureGameEdition();
+fullGame.game.gamePk = "900006";
 function listed(edition: ReturnType<typeof fixtureEdition>): CatalogGame {
   const [away, home] = edition.game.label.split(" @ ");
   const teamIds: Record<string, number> = {
+    ATL: 144,
+    SF: 137,
     NYM: 121,
     MIA: 146,
     SEA: 136,
@@ -98,6 +109,18 @@ const today = [
     statusLabel: "In Progress",
   },
   { ...listed(second), gamePk: "900004", doubleheader: true, gameNumber: 2 },
+  ...Array.from({ length: 6 }, (_, i) => ({
+    ...listed(second),
+    gamePk: String(900010 + i),
+    date: dates[i + 2],
+    startsAt: `${dates[i + 2]}T23:00:00Z`,
+  })),
+  {
+    ...listed(second),
+    gamePk: "900099",
+    away: { id: 121, name: "New York Mets", abbreviation: "NYM" },
+    home: { id: 147, name: "New York Yankees", abbreviation: "NYY" },
+  },
 ];
 await mkdir(".cache", { recursive: true });
 await writeFile(
@@ -105,7 +128,7 @@ await writeFile(
   JSON.stringify({
     ...featured,
     testCatalog: {
-      editions: [second, yesterday],
+      editions: [second, yesterday, fullGame],
       schedules: Object.fromEntries(
         dates.map((date, i) => [
           date,

@@ -2,8 +2,8 @@
 
 [Public app](https://baseball.saulrichardson.io) · [xLSTM model](https://huggingface.co/baseball-analytica/pitchpredict-xlstm)
 
-Read a real MLB at-bat, one pitch at a time. See the model’s forecast, reveal the
-actual pitch, and move to the next read. The entire at-bat is prepared before it
+Read a full Dodgers game, one pitch at a time. See the model’s forecast, reveal the
+actual pitch, and move to the next read. The entire game is prepared before it
 is published, so navigation never needs to generate a prediction.
 
 The interface has one primary action, a shared forecast/actual strike zone, a
@@ -11,9 +11,8 @@ compact scoreboard, and optional forecast detail. Back, refresh, retry, and
 replay preserve the same predictions. An anonymous signed cookie owns your place;
 no account is needed.
 
-**Games** opens every MLB team's schedule for the last seven days, including
-today. Choose a date and a completed game. A saved game opens immediately;
-a new game prepares one complete at-bat in the background, with progress that
+**Games** opens the Dodgers’ ten most recent completed games. Choose a date and a completed game. A saved game opens immediately;
+a new game prepares the entire game in the background, with progress that
 survives refresh. Each game remembers your place. The picker hides final scores.
 
 ## Run a real replay locally
@@ -40,8 +39,8 @@ REPLAY_EDITION_PATH="$PWD/.cache/replay.json" \
   SESSION_SECRET=local-development-secret npm run dev
 ```
 
-The publisher selects the first complete at-bat of 3–8 pitches from the latest
-completed Mets game in the past 21 days. `--game <MLB gamePk>` selects a specific
+The publisher includes every recorded pitch from the latest completed Dodgers
+game. `--game <MLB gamePk>` selects another of the ten supported
 completed game. Selection never uses prediction accuracy or a desirable outcome.
 Local preparation saves each successful forecast in `.cache/replay-preparation`;
 retrying resumes partial work. Keep the same artifact identifier when retrying.
@@ -68,7 +67,7 @@ npm run test:e2e
 edition, exercises the HTTP workflow, and shuts it down. `test:e2e` covers
 laptop and phone layouts, navigation, completion, refresh, offline retry, and a
 lost response. It uses the same deterministic fixture; it does not call a model.
-The game-browser tests also cover date changes, preparation progress, invalid
+The game-browser tests also cover the ten-game list, preparation progress, invalid
 links, and interrupted actions retained while switching games.
 Install its browser once with `npx playwright install chromium`.
 
@@ -77,7 +76,7 @@ run `BASE_URL=http://localhost:3000 npm run verify:product`. This checks ownersh
 redaction, idempotency, concurrency, completion, and command latency without
 invoking the model. The default maximum command latency is 2 seconds; override
 `VERIFY_MAX_COMMAND_MS` only for an explicit environment requirement.
-`BASE_URL=... npm run verify:catalog` checks all seven dates and rejects invalid
+`BASE_URL=... npm run verify:catalog` checks the ten completed Dodgers games and rejects unsupported
 preparation requests without generating predictions.
 
 PostgreSQL integration checks run when `TEST_POSTGRES_URL` points to a disposable,
@@ -125,7 +124,7 @@ Public routes are `/api/replays`, `/api/replays/[id]`, `/api/games`, and
 `/api/games/[id]`. The web Lambda has no model invocation permission; a separate
 stream worker prepares requested games. Every prediction is saved with its pre-pitch input;
 future actuals remain on the server until reveal. The default operator budget is
-20 model attempts per UTC day and 400 per UTC month, shared by the worker and
+4,000 model attempts per UTC day and 6,000 per UTC month, shared by the worker and
 operator and enforced atomically by the chosen storage. A reached limit shows
 the reset time. Saved replay navigation consumes no model budget.
 

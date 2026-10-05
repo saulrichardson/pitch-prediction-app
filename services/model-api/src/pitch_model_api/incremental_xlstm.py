@@ -37,6 +37,15 @@ class IncrementalPitchDecoder(torch.nn.Module):
 
         next_tokens = tokens if self._states is None else tokens[:, -1:]
         next_context = context if self._states is None else PackedPitchContext(*(x[:, -1:] for x in context))
+        # The eight sampling branches initially have identical observed history.
+        # Evaluate that prefix once; branches separate only when generated tokens differ.
+        # Require exact tokens AND every context field so distinct examples never share state.
+        shared_prefix = (self._states is None and tokens.shape[0] > 1
+                         and torch.equal(tokens, tokens[:1].expand_as(tokens))
+                         and all(torch.equal(field, field[:1].expand_as(field)) for field in context))
+        if shared_prefix:
+            next_tokens = next_tokens[:1]
+            next_context = PackedPitchContext(*(field[:1] for field in next_context))
         x = self.model.fusion(self.model.token_embed(next_tokens), self.model.context_adapter(next_context))
         states = []
         for index, block in enumerate(self.model.blocks):
@@ -71,6 +80,10 @@ class IncrementalPitchDecoder(torch.nn.Module):
         logits = self.model.lm_head(self.model.norm_out(x[:, -1:]))
         if self.model.logits_softcap is not None and self.model.logits_softcap > 0:
             logits = softcap(logits, self.model.logits_softcap)
+        if shared_prefix:
+            batch = tokens.shape[0]
+            states = [MState(*(field.expand(batch, *field.shape[1:]).clone() for field in state)) for state in states]
+            logits = logits.expand(batch, -1, -1).clone()
         self._states = tuple(states)
         self._tokens = tokens.detach().clone()
         self._context = PackedPitchContext(*(x.detach().clone() for x in context))

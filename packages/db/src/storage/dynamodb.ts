@@ -10,6 +10,18 @@ type DocumentClient = Pick<DynamoDBDocumentClient, "send">;
 export class DynamoDbStorage implements Storage {
   private readonly client: DocumentClient;
   private readonly tableName: string;
+  private nextReadAt = 0;
+  private nextWriteAt = 0;
+
+  /** Leave headroom below the table's 25 read / 10 write unit spending caps. */
+  private async reserveCapacity(kind: "read" | "write", units: number) {
+    const field = kind === "read" ? "nextReadAt" : "nextWriteAt";
+    const time = Date.now();
+    const start = Math.max(time, this[field]);
+    this[field] = start + units * (kind === "read" ? 50 : 150);
+    if (start > time)
+      await new Promise((resolve) => setTimeout(resolve, start - time));
+  }
   constructor(
     client?: DocumentClient,
     tableName?: string,
@@ -27,6 +39,7 @@ export class DynamoDbStorage implements Storage {
     this.tableName = table;
   }
   async read<T>(key: string): Promise<StoredRecord<T> | null> {
+    await this.reserveCapacity("read", 1);
     const { Item } = await this.client.send(
       new GetCommand({
         TableName: this.tableName,
@@ -50,11 +63,16 @@ export class DynamoDbStorage implements Storage {
     record: StoredRecord<T>,
     expectedRevision: number | null,
   ): Promise<boolean> {
+    const item = { pk: `REPLAY#${record.key}`, sk: "RECORD", ...record };
+    const units = Math.ceil(
+      (Buffer.byteLength(JSON.stringify(item)) + 64) / 1024,
+    );
+    await this.reserveCapacity("write", units);
     try {
       await this.client.send(
         new PutCommand({
           TableName: this.tableName,
-          Item: { pk: `REPLAY#${record.key}`, sk: "RECORD", ...record },
+          Item: item,
           ConditionExpression:
             expectedRevision === null
               ? "attribute_not_exists(pk) OR expiresAt <= :now"

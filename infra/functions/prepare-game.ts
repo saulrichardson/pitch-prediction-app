@@ -5,12 +5,17 @@ import {
 } from "@aws-sdk/client-lambda";
 import { getStorage } from "@pitch/db";
 import { gameIdSchema, predictionResponseSchema } from "@pitch/domain";
-import { gamePreparationWorker, getGameReplay } from "@pitch/workflows";
+import {
+  gamePreparationWorker,
+  getSupportedGameReplay,
+} from "@pitch/workflows";
 
 const client = new LambdaClient({});
+let deadline = Infinity;
 const run = gamePreparationWorker({
+  shouldYield: () => Date.now() >= deadline,
   storage: getStorage(),
-  loadGame: getGameReplay,
+  loadGame: getSupportedGameReplay,
   resolveModel: async () => {
     const alias = process.env.MODEL_INVOKE_TARGET;
     if (!alias) throw new Error("MODEL_INVOKE_TARGET is required.");
@@ -65,7 +70,12 @@ type StreamEvent = {
     };
   }>;
 };
-export async function handler(event: StreamEvent) {
+export async function handler(
+  event: StreamEvent,
+  context: { getRemainingTimeInMillis(): number },
+) {
+  // Leave time for a model invocation, checkpoint, and the next stream event.
+  deadline = Date.now() + context.getRemainingTimeInMillis() - 90_000;
   for (const record of event.Records) {
     const image = record.dynamodb?.NewImage;
     const key = image?.key?.S;

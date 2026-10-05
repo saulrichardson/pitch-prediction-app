@@ -1,6 +1,6 @@
 import type { Storage } from "@pitch/db";
 import {
-  selectFeaturedAtBat,
+  selectFullGame,
   type GameReplay,
   type PredictionRequest,
   type PredictionResponse,
@@ -8,8 +8,10 @@ import {
 import {
   indexGameEdition,
   PreparationBudgetError,
+  PreparationYield,
   prepareReplay,
 } from "./preparation";
+import { saveReplaySource, readReplaySource } from "./edition-store";
 import { jobKey, type GamePreparationJob, type ModelIdentity } from "./job";
 
 export function gamePreparationWorker(input: {
@@ -21,6 +23,7 @@ export function gamePreparationWorker(input: {
     model: ModelIdentity,
   ) => Promise<PredictionResponse>;
   now?: () => Date;
+  shouldYield?: () => boolean;
   log?: (event: Record<string, unknown>) => void;
 }) {
   const now = input.now ?? (() => new Date());
@@ -57,25 +60,42 @@ export function gamePreparationWorker(input: {
     input.log?.({ event: "game_preparation_started", gamePk, requestId });
     let phase: "load" | "select" | "predict" = "load";
     try {
-      const replay = await input.loadGame(gamePk);
+      const replay = record.value.sourceKey
+        ? await readReplaySource(input.storage, record.value.sourceKey)
+        : await input.loadGame(gamePk);
       if (
         replay.game.gamePk !== gamePk ||
         replay.game.officialDate !== record.value.date
       )
         throw new Error("Game feed does not match the requested date.");
       phase = "select";
-      selectFeaturedAtBat(replay);
+      selectFullGame(replay);
+      const sourceKey =
+        record.value.sourceKey ??
+        (await saveReplaySource(input.storage, replay));
       phase = "predict";
       const model = record.value.model ?? (await input.resolveModel());
-      await update({ ...record.value, model, status: "preparing" });
+      await update({ ...record.value, model, sourceKey, status: "preparing" });
       const edition = await prepareReplay({
         replay,
         storage: input.storage,
         modelArtifact: model.artifact,
         now,
+        shouldYield: input.shouldYield,
         predict: (request) => input.predict(request, model),
-        onProgress: async (completed, total) =>
-          update({ ...record!.value, completed, total, status: "preparing" }),
+        onProgress: async (completed, total) => {
+          if (
+            completed <= record!.value.completed &&
+            total === record!.value.total
+          )
+            return;
+          await update({
+            ...record!.value,
+            completed: Math.max(record!.value.completed, completed),
+            total,
+            status: "preparing",
+          });
+        },
       });
       await indexGameEdition(input.storage, edition);
       await update({
@@ -93,6 +113,16 @@ export function gamePreparationWorker(input: {
         pitches: edition.pitches.length,
       });
     } catch (error) {
+      if (error instanceof PreparationYield) {
+        await update({ ...record.value, status: "queued" });
+        input.log?.({
+          event: "game_preparation_continued",
+          gamePk,
+          completed: record.value.completed,
+          total: record.value.total,
+        });
+        return;
+      }
       input.log?.({
         event: "game_preparation_failed",
         gamePk,
@@ -106,7 +136,7 @@ export function gamePreparationWorker(input: {
           error instanceof PreparationBudgetError
             ? "New replay preparation is paused until the next preparation window. Saved games are still available."
             : phase === "select"
-              ? "This game has no complete at-bat with enough pitch data for a replay."
+              ? "This game does not have a complete recorded pitch sequence."
               : "This replay couldn’t be prepared. Try again to resume the saved forecasts.",
         retryable: phase !== "select",
         retryAt:

@@ -3,6 +3,7 @@ import { MemoryStorage } from "../../packages/db/src/storage/memory";
 import { fixtureEdition, fixturePrediction } from "../../tests/fixtures/replay";
 import {
   consumePreparationBudget,
+  preparationLimits,
   prepareReplay,
   publishReplay,
 } from "@pitch/workflows";
@@ -73,7 +74,8 @@ describe("replay preparation and publication", () => {
 
   it("enforces one atomic daily and monthly model budget", async () => {
     const storage = new MemoryStorage();
-    for (let i = 0; i < 60; i++) await consumePreparationBudget(storage, now());
+    for (let i = 0; i < preparationLimits.dailyAttempts; i++)
+      await consumePreparationBudget(storage, now());
     await expect(consumePreparationBudget(storage, now())).rejects.toThrow(
       "budget reached",
     );
@@ -81,12 +83,15 @@ describe("replay preparation and publication", () => {
       total: number;
       days: Record<string, number>;
     }>("preparation-budget:2026-09");
-    expect(record?.value).toEqual({ total: 60, days: { "2026-09-12": 60 } });
+    expect(record?.value).toEqual({
+      total: preparationLimits.dailyAttempts,
+      days: { "2026-09-12": preparationLimits.dailyAttempts },
+    });
     await storage.write(
       {
         ...record!,
         revision: record!.revision + 1,
-        value: { total: 400, days: {} },
+        value: { total: preparationLimits.monthlyAttempts, days: {} },
       },
       record!.revision,
     );
@@ -101,7 +106,10 @@ describe("replay preparation and publication", () => {
       {
         key: "preparation-budget:2026-09",
         revision: 0,
-        value: { total: 399, days: { "2026-09-12": 20 } },
+        value: {
+          total: preparationLimits.monthlyAttempts - 1,
+          days: { "2026-09-12": 20 },
+        },
       },
       null,
     );
@@ -113,7 +121,7 @@ describe("replay preparation and publication", () => {
       results.filter((result) => result.status === "fulfilled"),
     ).toHaveLength(1);
     expect((await storage.read("preparation-budget:2026-09"))?.value).toEqual({
-      total: 400,
+      total: preparationLimits.monthlyAttempts,
       days: { "2026-09-12": 21 },
     });
   });

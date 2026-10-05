@@ -79,10 +79,9 @@ export function GameBrowser({
       setLoading(true);
       setListError(null);
       try {
-        const result = await requestJson<GameCatalog>(
-          `/api/games${date ? `?date=${encodeURIComponent(date)}` : ""}`,
-          { signal: controller.signal },
-        );
+        const result = await requestJson<GameCatalog>("/api/games", {
+          signal: controller.signal,
+        });
         if (!controller.signal.aborted) setCatalog(result);
       } catch (error) {
         if (!controller.signal.aborted)
@@ -96,7 +95,7 @@ export function GameBrowser({
       }
     });
     return () => controller.abort();
-  }, [date, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -214,9 +213,9 @@ export function GameBrowser({
     <section className="game-browser" aria-label="Game browser">
       <div className="catalog-heading">
         <div>
-          <p className="eyebrow">This week in baseball</p>
+          <p className="eyebrow">Dodgers baseball</p>
           <h1>Choose a game.</h1>
-          <p>One at-bat. Any team.</p>
+          <p>The last 10 completed games. Every pitch.</p>
         </div>
         <button
           className="text-button catalog-return"
@@ -227,25 +226,6 @@ export function GameBrowser({
           <ArrowLeft size={15} /> Replay
         </button>
       </div>
-      {catalog ? (
-        <div className="date-strip" role="group" aria-label="Game date">
-          {[...catalog.window.dates].reverse().map((day) => (
-            <button
-              key={day}
-              className={selectedDate === day ? "selected" : ""}
-              aria-pressed={selectedDate === day}
-              aria-label={dateLabel(day, "full")}
-              onClick={() => onBrowse(day)}
-              disabled={busy || requesting}
-            >
-              <span>
-                {day === catalog.window.end ? "Today" : dateLabel(day)}
-              </span>
-              <strong>{Number(day.slice(-2))}</strong>
-            </button>
-          ))}
-        </div>
-      ) : null}
       {gamePk ? (
         <section
           ref={preparationPanel}
@@ -285,7 +265,7 @@ export function GameBrowser({
             <p>{progress.message}</p>
           ) : progress?.status === "preparing" ? (
             <p>
-              Preparing pitch{" "}
+              Preparing the full game: pitch{" "}
               {Math.min(progress.completed + 1, progress.total ?? 1)}
               {progress.total ? ` of ${progress.total}` : ""}.
             </p>
@@ -294,7 +274,7 @@ export function GameBrowser({
           ) : progress?.status === "ready" ? (
             <p>Opening your saved replay.</p>
           ) : (
-            <p>Prepare this at-bat once, then play it anytime.</p>
+            <p>Prepare the full game once, then play it anytime.</p>
           )}
           {progress &&
           (progress.status === "queued" || progress.status === "preparing") &&
@@ -361,7 +341,7 @@ export function GameBrowser({
         </section>
       ) : null}
       <div className="games-heading">
-        <h2>{selectedDate ? dateLabel(selectedDate, "full") : "Games"}</h2>
+        <h2>Recent Dodgers games</h2>
         {catalog && !loading ? (
           <span>
             {catalog.games.length}{" "}
@@ -379,7 +359,7 @@ export function GameBrowser({
             Try again
           </button>
           <button className="text-button" onClick={() => onBrowse(null)}>
-            Show this week
+            Show recent games
           </button>
         </div>
       ) : loading ? (
@@ -388,8 +368,7 @@ export function GameBrowser({
         </div>
       ) : catalog?.games.length === 0 ? (
         <div className="catalog-empty">
-          <h3>No games on this date.</h3>
-          <p>Choose another day above.</p>
+          <h3>No completed Dodgers games available.</h3>
         </div>
       ) : (
         <div className="game-list">
@@ -411,6 +390,7 @@ export function GameBrowser({
               <button
                 className={`game-row ${gamePk === game.gamePk ? "is-selected" : ""}`}
                 key={game.gamePk}
+                data-game-id={game.gamePk}
                 disabled={game.status !== "complete" || busy || requesting}
                 aria-label={`${game.away.name} at ${game.home.name}${game.doubleheader ? `, game ${game.gameNumber}` : ""}, ${game.status === "complete" ? action : game.statusLabel}`}
                 onClick={() =>
@@ -438,6 +418,7 @@ export function GameBrowser({
                   </span>
                 </span>
                 <span className="game-row-detail">
+                  <span>{dateLabel(game.date, "full")}</span>
                   {game.doubleheader ? (
                     <span>Game {game.gameNumber}</span>
                   ) : null}

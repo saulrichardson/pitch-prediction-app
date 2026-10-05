@@ -24,12 +24,15 @@ import type {
   PredictionResponse,
 } from "./types";
 
-export const replayContract = "prepared-replay-v1";
+export const legacyReplayContract = "prepared-replay-v1";
+export const replayContract = "prepared-game-v2";
 export const maxFeaturedPitches = 8;
 
 export type ReplayEdition = {
   id: string;
-  contract: typeof replayContract;
+  contract: typeof replayContract | typeof legacyReplayContract;
+  /** Required for a full game; guards against accidentally publishing a prefix. */
+  totalPitches?: number;
   game: GameSummary;
   publishedAt: string;
   modelArtifact: string;
@@ -110,6 +113,10 @@ export function editionSummary(edition: ReplayEdition) {
   const first = edition.pitches[0].actual;
   return {
     id: edition.id,
+    scope:
+      edition.contract === replayContract
+        ? ("game" as const)
+        : ("at-bat" as const),
     game: {
       gamePk: edition.game.gamePk,
       label: edition.game.label,
@@ -191,15 +198,24 @@ export function replayView(session: ReplaySession, edition: ReplayEdition) {
     summary: completed
       ? {
           pitches: history.length,
-          outcome: {
-            strikeout: "Strikeout",
-            walk: "Walk",
-            hit_by_pitch: "Hit by pitch",
-            ball_in_play: "Ball in play",
-          }[
-            applyPitchResult(current.actual.preState, current.actual.result)
-              .terminalState!
-          ],
+          finalScore: {
+            away: edition.game.awayScore,
+            home: edition.game.homeScore,
+          },
+          outcome:
+            edition.contract === replayContract
+              ? `${edition.game.label} · ${edition.game.awayScore}–${edition.game.homeScore}`
+              : {
+                  strikeout: "Strikeout",
+                  walk: "Walk",
+                  hit_by_pitch: "Hit by pitch",
+                  ball_in_play: "Ball in play",
+                }[
+                  applyPitchResult(
+                    current.actual.preState,
+                    current.actual.result,
+                  ).terminalState!
+                ],
           topPicks: history.filter(
             (item) => item.evaluation.pitchTypeRank === 1,
           ).length,
@@ -213,6 +229,33 @@ export function replayView(session: ReplaySession, edition: ReplayEdition) {
   };
 }
 export type ReplayView = ReturnType<typeof replayView>;
+
+/** Every recorded pitch, including short/long at-bats and extra innings. */
+export function selectFullGame(replay: GameReplay): PitchEvent[] {
+  if (!["Final", "Game Over", "Completed Early"].includes(replay.game.status))
+    throw new Error("Only completed games can be published.");
+  if (!replay.pitches.length)
+    throw new Error("This game has no recorded pitches.");
+  let frame = 0;
+  const seen = new Set<string>();
+  for (const [index, pitch] of replay.pitches.entries()) {
+    pitchEventSchema.parse(pitch);
+    const nextFrame =
+      (pitch.preState.inning - 1) * 2 +
+      (pitch.preState.half === "bottom" ? 1 : 0);
+    if (
+      pitch.gamePitchIndex !== index ||
+      seen.has(pitch.id) ||
+      nextFrame < frame ||
+      (index === 0 && (nextFrame !== 0 || pitch.pitchNumber !== 1)) ||
+      pitch.preState.outs === 3
+    )
+      throw new Error("Game pitches must be complete and in recorded order.");
+    seen.add(pitch.id);
+    frame = nextFrame;
+  }
+  return replay.pitches;
+}
 
 // Select by sequence length and completeness, never model performance or a desirable result.
 export function selectFeaturedAtBat(replay: GameReplay): PitchEvent[] {
@@ -265,7 +308,8 @@ function isCompleteAtBat(pitches: PitchEvent[]): boolean {
 
 const editionSchema = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/),
-  contract: z.literal(replayContract),
+  contract: z.enum([replayContract, legacyReplayContract]),
+  totalPitches: z.number().int().positive().optional(),
   modelArtifact: z.string().min(1),
   sourceUrl: z.url(),
   publishedAt: z.iso.datetime({ offset: true }),
@@ -287,20 +331,27 @@ const editionSchema = z.object({
         prediction: predictionResponseSchema,
       }),
     )
-    .min(3)
-    .max(maxFeaturedPitches),
+    .min(1),
 });
 
 export function assertEdition(edition: ReplayEdition): void {
   editionSchema.parse(edition);
-  if (new TextEncoder().encode(JSON.stringify(edition)).length > 256_000)
+  if (
+    new TextEncoder().encode(JSON.stringify(edition)).length >
+    (edition.contract === replayContract ? 64_000_000 : 256_000)
+  )
     throw new Error("Replay edition exceeds the publication size limit.");
   const first = edition.pitches[0];
-  if (!isCompleteAtBat(edition.pitches.map((item) => item.actual)))
+  const actuals = edition.pitches.map((item) => item.actual);
+  if (edition.contract === replayContract) {
+    selectFullGame({ game: edition.game, pitches: actuals });
+    if (edition.totalPitches !== actuals.length)
+      throw new Error("Full game edition is missing recorded pitches.");
+  } else if (!isCompleteAtBat(actuals))
     throw new Error(
       "Edition must contain one complete contiguous at-bat with valid counts.",
     );
-  for (const item of edition.pitches) {
+  for (const [index, item] of edition.pitches.entries()) {
     if (item.prediction.modelVersion !== first.prediction.modelVersion)
       throw new Error("Edition mixes model versions.");
     const history = item.request.pitcherSessionHistory;
@@ -317,7 +368,8 @@ export function assertEdition(edition: ReplayEdition): void {
       );
     const expected = buildPredictionRequest({
       currentPitch: item.actual,
-      history,
+      history:
+        edition.contract === replayContract ? actuals.slice(0, index) : history,
       gameDate: edition.game.officialDate,
     });
     if (

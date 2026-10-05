@@ -86,7 +86,7 @@ test("slow or unavailable portraits never block replay and team marks follow the
       .first()
       .dispatchEvent("error");
     await expect(page.locator(".scoreboard .team-mark-fallback")).toHaveText(
-      "NYM",
+      "ATL",
     );
     await page.getByRole("button", { name: "Games", exact: true }).click();
     await expect(

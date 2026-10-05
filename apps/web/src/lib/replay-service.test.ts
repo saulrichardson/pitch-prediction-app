@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MemoryStorage } from "../../../../packages/db/src/storage/memory";
 import { replayService } from "./replay-service";
-import { fixtureEdition } from "../../../../tests/fixtures/replay";
+import {
+  fixtureEdition,
+  fixtureGameEdition,
+} from "../../../../tests/fixtures/replay";
+import { indexGameEdition, saveEdition } from "@pitch/workflows";
 async function setup() {
   const storage = new MemoryStorage();
   const edition = fixtureEdition();
@@ -63,5 +67,36 @@ describe("durable replay sessions", () => {
     };
     await a.command(edition.id, "one", cmd);
     expect((await b.command(edition.id, "one", cmd)).revision).toBe(1);
+  });
+  it("upgrades an existing short replay URL to the whole game without losing its revealed pitch", async () => {
+    const { a, b, edition, storage } = await setup();
+    let view = await a.start(edition.id, "one");
+    for (let step = 0; step < 7; step++)
+      view = await a.command(edition.id, "one", {
+        id: crypto.randomUUID(),
+        expectedRevision: view.revision,
+        action: step % 2 ? "next" : "reveal",
+      });
+    expect(view.phase).toBe("complete");
+    const full = fixtureGameEdition();
+    await saveEdition(storage, full);
+    await indexGameEdition(storage, full);
+    view = await b.read(edition.id, "one");
+    expect(view).toMatchObject({
+      id: edition.id,
+      index: 3,
+      phase: "revealed",
+      edition: { scope: "game", pitchCount: 72 },
+    });
+    expect(
+      (
+        await b.command(view.id, "one", {
+          id: crypto.randomUUID(),
+          expectedRevision: view.revision,
+          action: "next",
+        })
+      ).index,
+    ).toBe(4);
+    expect((await a.start(edition.id, "new-visitor")).index).toBe(0);
   });
 });

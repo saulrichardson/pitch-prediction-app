@@ -1,28 +1,29 @@
 # Product Intent
 
-Pitch Prediction App makes a real MLB at-bat readable, one pitch ahead.
+Pitch Prediction App makes a full Dodgers game readable, one pitch ahead.
 The user sees a forecast, reveals the actual pitch, and compares the two. The
 experience should feel immediate, deliberate, and easy to understand without
 instructions surrounding every action.
 
 ## Product Direction
 
-The primary experience is a complete, prepared at-bat of 3–8 pitches from a
-completed MLB game. Users can choose any team and any official game date in the
-last seven days, including today. Dates follow America/New_York. The featured
-replay remains a quick entry point; the Games browser offers the full schedule
-without final scores. Live, postponed, and cancelled games show their status.
-An edition is selected for a coherent sequence, never for a flattering model
-result. A small complete experience is the unit of delivery.
+The primary experience is a complete prepared game, from the first recorded
+pitch through the last, including every batter, pitching change, half-inning,
+and extra inning. The supported catalog is the Dodgers’ ten most recent
+completed games, newest first. Both the picker and preparation admission use
+that same limit. Dates follow America/New_York; the schedule query includes
+postseason games and crosses the season boundary explicitly when necessary.
+The featured replay remains a quick entry point. Game rows show dates and
+opponents without scores or winners. At-bats are never used as a stopping point.
 
 A game is prepared once and shared across users. Its first opening queues
 preparation with visible pitch progress; the user can keep browsing and return
 after a refresh. Only a complete validated edition opens the replay. Later
 openings use that edition immediately. Preparation uses the existing shared
-limit of 60 model attempts per UTC day and 400 per month. A reached limit shows
+limit of 4,000 model attempts per UTC day and 6,000 per month. A reached limit shows
 the reset time and leaves saved games available. To keep one anonymous visitor
 from consuming that shared allowance, each pseudonymous network source may
-prepare four distinct games per UTC day and twenty per UTC month. Retrying the
+prepare ten distinct games per UTC day and twenty per UTC month. Retrying the
 same game does not consume another caller allowance.
 Unprepared games say **Prepare replay**; saved games say **Ready**. The selected
 game's row reflects preparation progress. First-time preparation is a visible
@@ -35,17 +36,17 @@ inference is publication work. It is never part of a replay command.
 ## Core Workflow
 
 1. Open the feature or choose a date and game from Games.
-2. Open the saved at-bat, or follow preparation progress, then read the leading
+2. Open the saved game, or follow preparation progress, then read the leading
    forecast with two alternatives.
 3. Reveal the actual pitch on the same comparison surface.
 4. Advance to the next saved forecast.
-5. Finish the at-bat, see the result and match count, and choose another game.
-   Restarting the same at-bat is a separate optional action in the recap.
+5. Finish the game, see the final score and match count, and choose another game.
+   Restarting the same game is a separate optional action in the recap.
 
 Each game keeps its own cursor and pending action when the user switches games.
 The main action changes from **Reveal pitch** to **Next pitch** to **Choose
 another game**. **Replay again** belongs to the completed recap so continuing
-does not repeatedly restart the same short sequence. Back reverses one replay
+does not restart the game unexpectedly. Back reverses one replay
 step. Refresh restores the same place. A failed
 request has one retry action and preserves the last acknowledged view.
 
@@ -97,11 +98,10 @@ invented from pitch-level probabilities.
 
 Baseball analysts, coaches, fans, and technical evaluators should be able to
 judge what the model expected and how it compared with a real sequence.
-Individual accounts, manual scenario input, counterfactual branching, full-game
-navigation, live inference, and batted-ball simulation are outside this primary
+Individual accounts, manual scenario input, counterfactual branching, live inference, and batted-ball simulation are outside this primary
 experience. A future expansion must preserve the immediate, coherent replay.
 
 Anonymous sessions last 14 days. Existing editions remain available to their
 sessions when a new feature is published. Publication failures leave the prior
-feature available. The game browser loads the current MLB schedule on demand;
+feature available. The game browser loads the recent Dodgers schedule on demand;
 the featured edition remains operator-published without a daily scheduler.

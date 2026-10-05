@@ -1,27 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { catalogWindow, normalizeSchedule } from "../src/catalog";
+import {
+  baseballDate,
+  supportedGames,
+  normalizeSchedule,
+} from "../src/catalog";
 
 describe("game discovery", () => {
-  it("keeps seven official baseball dates across UTC midnight, month/year and DST boundaries", () => {
-    expect(catalogWindow(new Date("2026-01-01T02:00:00Z"))).toEqual({
-      end: "2025-12-31",
-      start: "2025-12-25",
-      dates: [
-        "2025-12-31",
-        "2025-12-30",
-        "2025-12-29",
-        "2025-12-28",
-        "2025-12-27",
-        "2025-12-26",
-        "2025-12-25",
-      ],
-    });
-    expect(catalogWindow(new Date("2026-03-09T03:30:00Z")).end).toBe(
-      "2026-03-08",
-    );
-    expect(catalogWindow(new Date("2026-03-09T04:30:00Z")).end).toBe(
-      "2026-03-09",
-    );
+  it("uses the official baseball day across UTC midnight and DST", () => {
+    expect(baseballDate(new Date("2026-01-01T02:00:00Z"))).toBe("2025-12-31");
+    expect(baseballDate(new Date("2026-03-09T03:30:00Z"))).toBe("2026-03-08");
+    expect(baseballDate(new Date("2026-03-09T04:30:00Z"))).toBe("2026-03-09");
   });
   it("distinguishes doubleheaders and live/cancelled games without exposing scores", () => {
     const base = {
@@ -84,5 +72,35 @@ describe("game discovery", () => {
     expect(() =>
       normalizeSchedule({ dates: [{ games: [{}] }] }, "2026-09-12"),
     ).toThrow();
+  });
+  it("limits the catalog to the ten latest completed Dodgers games", () => {
+    const games = Array.from({ length: 14 }, (_, i) => ({
+      gamePk: String(100 + i),
+      date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+      startsAt: `2026-09-${String(i + 1).padStart(2, "0")}T23:00:00Z`,
+      away: { id: 119, abbreviation: "LAD", name: "Dodgers" },
+      home: { id: 137, abbreviation: "SF", name: "Giants" },
+      gameNumber: 1,
+      doubleheader: false,
+      status: "complete" as const,
+      statusLabel: "Final",
+    }));
+    const result = supportedGames([
+      ...games,
+      { ...games[13], gamePk: "live", status: "live" },
+      {
+        ...games[13],
+        gamePk: "unrelated",
+        away: { id: 121, abbreviation: "NYM", name: "Mets" },
+      },
+      games[13],
+    ]);
+    expect(result).toHaveLength(10);
+    expect(result.map((game) => game.gamePk)).toEqual(
+      games
+        .slice(4)
+        .reverse()
+        .map((game) => game.gamePk),
+    );
   });
 });

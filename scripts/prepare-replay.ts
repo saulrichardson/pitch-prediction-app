@@ -1,10 +1,18 @@
 import { readFile, writeFile, mkdir, open } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import type { ReplayEdition } from "@pitch/domain";
 import { getStorage, type Storage, type StoredRecord } from "@pitch/db";
-import { getGameReplay, getLatestMetsGame } from "@pitch/workflows";
+import {
+  getSupportedGameReplay,
+  getRecentDodgersGames,
+} from "@pitch/workflows";
 import { predictPitch } from "../apps/web/src/lib/model-service";
-import { prepareReplay, publishReplay } from "@pitch/workflows";
+import {
+  prepareReplay,
+  publishReplay,
+  PreparationYield,
+} from "@pitch/workflows";
 
 async function main() {
   const { values } = parseArgs({
@@ -71,17 +79,28 @@ async function main() {
     };
   }
   try {
-    const gamePk = values.game ?? (await getLatestMetsGame()).gamePk;
-    const replay = await getGameReplay(gamePk);
+    const gamePk = values.game ?? (await getRecentDodgersGames())[0]?.gamePk;
+    if (!gamePk) throw new Error("No completed Dodgers game is available.");
+    const replay = await getSupportedGameReplay(gamePk);
     console.log(`Preparing ${replay.game.label}, ${replay.game.officialDate}`);
-    const edition = await prepareReplay({
-      replay,
-      modelArtifact: values["model-artifact"],
-      storage,
-      predict: (request) => predictPitch(request, { timeoutMs: 60000 }),
-      onProgress: (done, total) =>
-        console.log(`Saved real forecast ${done}/${total}`),
-    });
+    let edition: ReplayEdition | undefined;
+    while (!edition) {
+      const deadline = Date.now() + 450_000;
+      try {
+        edition = await prepareReplay({
+          replay,
+          shouldYield: () => Date.now() >= deadline,
+          modelArtifact: values["model-artifact"],
+          storage,
+          predict: (request) => predictPitch(request, { timeoutMs: 60000 }),
+          onProgress: (done, total) =>
+            console.log(`Saved real forecast ${done}/${total}`),
+        });
+      } catch (error) {
+        if (!(error instanceof PreparationYield)) throw error;
+        console.log("Continuing from saved forecasts.");
+      }
+    }
     if (values.output) {
       const output = path.resolve(values.output);
       await mkdir(path.dirname(output), { recursive: true });

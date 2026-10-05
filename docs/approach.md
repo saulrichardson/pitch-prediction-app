@@ -18,11 +18,11 @@
 
 ```text
 operator + completed MLB game
-  -> normalize and select a complete 3–8-pitch at-bat
+  -> normalize every recorded pitch in the completed game
   -> build each pre-pitch model request
   -> acquire preparation lease + consume atomic model-attempt budget
   -> invoke real model; validate and save each response
-  -> validate and save an immutable edition
+  -> validate and save immutable compressed chunks, then publish their manifest
   -> conditionally publish the featured-edition pointer
 
 browser
@@ -54,7 +54,7 @@ process-cache persistence are absent from the active path.
 - `packages/workflows/src/preparation.ts` owns inference leases, resumability, attempt
   budgets, immutable editions, and atomic publication.
 - `apps/web/src/lib/replay-service.ts` owns workspace-scoped session operations.
-- `packages/domain/src/catalog.ts` owns the seven-day window and spoiler-free
+- `packages/domain/src/catalog.ts` owns the ten-completed-Dodgers-games rule and spoiler-free
   schedule projection. `packages/workflows/src/catalog.ts` owns discovery and
   durable requests; `game-preparation.ts` owns worker state transitions.
 - `infra/functions/prepare-game.ts` binds the stream and immutable model client.
@@ -70,7 +70,7 @@ process-cache persistence are absent from the active path.
 
 ## Invariants
 
-1. An edition contains one complete contiguous at-bat. A forecast never changes
+1. A `prepared-game-v2` edition contains the entire recorded game. A forecast never changes
    when a user revisits it. Edition IDs hash the game, selected facts, requests,
    contract, and operator-supplied model artifact identity. That identity must
    change when the checkpoint, normalizer, or sampling configuration changes.
@@ -91,18 +91,21 @@ process-cache persistence are absent from the active path.
    Browser requests have a finite timeout;
    unacknowledged commands survive refresh and reuse the original UUID on retry.
 9. Publication requires valid distributions, one model version, matching
-   pre-pitch inputs, ordered historical context, and a 256 KB edition size limit.
+   pre-pitch inputs, ordered historical context, and the exact full-game pitch count. Gzip chunks
+   remain below the DynamoDB item limit; a checksum-protected manifest is written last.
+   The expanded edition is limited to 64 MB.
    Failed or partial preparation never changes the featured pointer.
 10. Preparation reserves one model attempt at a time in an atomic monthly
-    counter: 60 per UTC day and 400 per UTC month. Failed invocations count.
+    counter: 4,000 per UTC day and 6,000 per UTC month. Failed invocations count.
     Saved successful forecasts are reused after interruption.
 11. CloudFront overwrites the trusted viewer-address header before forwarding
     API requests. The web route HMAC-pseudonymizes that address and never stores
-    it. An atomic caller budget admits at most four distinct games per UTC day
+    it. An atomic caller budget admits at most ten distinct games per UTC day
     and twenty per UTC month; duplicate requests for one game are idempotent.
 
 DynamoDB records use `REPLAY#<key>` / `RECORD`; PostgreSQL uses `replay_records`.
-Legacy tables/records are retained and are not read by this runtime. SQL
+Historical pre-replay tables are retained and are not read by this runtime.
+Existing `prepared-replay-v1` public editions remain readable during the game-format migration. SQL
 migrations are an explicit deployment step, never work done by a web request.
 
 ## Display And Model Semantics
@@ -173,8 +176,10 @@ owns budget setup, alerts, shutdown limitations, and explicit recovery.
 
 The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each
 prediction. It evaluates the prefix once, then one new token at a time using
-the same upstream chunk kernel, weights, grammar, and eight samples. No state
-crosses requests. OpenMP/MKL use one compute thread at the 1 GB Lambda allocation,
+the same upstream chunk kernel, weights, grammar, and eight samples. The identical observed prefix shared by all eight samples is evaluated once
+and copied into independent recurrent states before sampled branches diverge.
+Exact token and context equality is required; different inputs never share state.
+No state crosses requests. OpenMP/MKL use one compute thread at the 1 GB Lambda allocation,
 which measured faster than the default thread pool. Kernel parity tests and seeded checkpoint comparisons gate
 upgrades. Model versions are retained during release so in-flight preparation
 can finish; retire an old snapshot only after checking resumable job references.
@@ -183,10 +188,13 @@ cache boundaries, release order, and the remaining budget choice.
 
 The schedule cache lasts two minutes. Each date's small edition index lets the
 picker avoid reading every prediction payload. The selected job is polled every
-2.5 seconds while active. A ten-minute stale state exposes recovery; saved model
+2.5 seconds while active. The normalized source is pinned once with the model identity.
+Before the worker deadline, it releases its lease and writes a queued continuation;
+the stream resumes only missing forecasts. Completion publishes the whole game.
+Successful forecasts and the publication timestamp survive all worker batches. A ten-minute stale state exposes recovery; saved model
 responses and the pinned version survive retries. Publication writes the full
 validated edition before any ready index. Existing edition/session URLs continue
-working when their game leaves the seven-day discovery window.
+working when their game leaves the ten-game discovery list.
 
 Completion keeps the final revealed pitch and offers **Choose another game**;
 the recap owns the explicit **Replay again** action. Invalid or unavailable
@@ -194,7 +202,10 @@ explicit replay links remain visible errors, while stale local resume hints
 may return to the featured introduction. Superseded restoration requests cannot
 start sessions or clear a newer URL. Preparation request errors remain attached
 to their selected game across status polling; viewing active preparation only
-reads progress.
+reads progress. The progress bar has fixed width even for hundreds of pitches.
+Existing at-bat editions stay readable; when a full edition of the same game is
+published, a conditional session upgrade maps the old cursor to its recorded
+game-pitch index. Unsupported games cannot enqueue new preparation.
 
 Both local and GitHub web releases use `scripts/deploy-serverless-web.sh` so
 cost checks, S3 assets, the CloudFront document and the API image move together.
@@ -221,7 +232,9 @@ npm run test:e2e
 ```
 
 CI provisions a disposable PostgreSQL instance for migration and storage
-integration checks. The deterministic UI fixture is test-only and cannot be
+integration checks. The UI bundles licensed local font files, avoiding remote Google Fonts compilation
+in builds and development. Playwright waits for the actual document to compile,
+and CI retains failed browser traces. The deterministic UI fixture is test-only and cannot be
 loaded from the filesystem in a production web process. Test-file loading and
 real-model generation are separate verification paths.
 

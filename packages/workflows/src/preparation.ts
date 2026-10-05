@@ -6,7 +6,7 @@ import {
   predictionResponseSchema,
   buildPredictionRequest,
   replayContract,
-  selectFeaturedAtBat,
+  selectFullGame,
   editionSummary,
   type EditionSummary,
   type GameReplay,
@@ -15,11 +15,12 @@ import {
   type ReplayEdition,
 } from "@pitch/domain";
 import type { Storage } from "@pitch/db";
+import { readEdition, saveEdition } from "./edition-store";
 import { gameEditionKey, catalogEditionsKey } from "./job";
 
 export const preparationLimits = {
-  dailyAttempts: 60,
-  monthlyAttempts: 400,
+  dailyAttempts: 4000,
+  monthlyAttempts: 6000,
 } as const;
 
 export class PreparationBudgetError extends Error {
@@ -89,6 +90,8 @@ export async function consumePreparationBudget(
   );
 }
 
+export class PreparationYield extends Error {}
+
 export async function prepareReplay(input: {
   replay: GameReplay;
   modelArtifact: string;
@@ -96,11 +99,13 @@ export async function prepareReplay(input: {
   predict: (request: PredictionRequest) => Promise<PredictionResponse>;
   onProgress?: (done: number, total: number) => void | Promise<void>;
   now?: () => Date;
+  /** Worker yields with durable checkpoints before its invocation deadline. */
+  shouldYield?: () => boolean;
 }): Promise<ReplayEdition> {
   const now = input.now ?? (() => new Date());
   if (!input.modelArtifact.trim())
     throw new Error("Model artifact identity is required.");
-  const pitches = selectFeaturedAtBat(input.replay);
+  const pitches = selectFullGame(input.replay);
   await input.onProgress?.(0, pitches.length);
   const requests = pitches.map((actual) =>
     buildPredictionRequest({
@@ -123,26 +128,32 @@ export async function prepareReplay(input: {
       }),
     )
     .digest("hex");
-  const existing = await input.storage.read<ReplayEdition>(`edition:${id}`);
+  const existing = await readEdition(input.storage, id);
   if (existing) {
-    assertEdition(existing.value);
-    return existing.value;
+    return existing;
   }
   const lockKey = `preparation-lock:${id}`;
-  const lock = await input.storage.read<{ until: number }>(lockKey);
+  const lock = await input.storage.read<{
+    until: number;
+    publishedAt?: string;
+  }>(lockKey);
   if (lock && lock.value.until > now().getTime())
     throw new Error("This replay is already being prepared.");
+  const publishedAt = lock?.value.publishedAt ?? now().toISOString();
   const revision = (lock?.revision ?? -1) + 1;
   const until = now().getTime() + 10 * 60_000;
   if (
     !(await input.storage.write(
-      { key: lockKey, revision, value: { until } },
+      { key: lockKey, revision, value: { until, publishedAt } },
       lock?.revision ?? null,
     ))
   )
     throw new Error("Another publisher claimed this replay.");
   const ownsLease = async () => {
-    const lease = await input.storage.read<{ until: number }>(lockKey);
+    const lease = await input.storage.read<{
+      until: number;
+      publishedAt?: string;
+    }>(lockKey);
     if (lease?.revision !== revision || lease.value.until <= now().getTime())
       throw new Error(
         "Preparation lease expired. Retry to continue from saved predictions.",
@@ -156,6 +167,7 @@ export async function prepareReplay(input: {
       const saved = await input.storage.read<PredictionResponse>(key);
       let prediction = saved?.value;
       if (!prediction) {
+        if (input.shouldYield?.()) throw new PreparationYield();
         await consumePreparationBudget(input.storage, now());
         prediction = await input.predict(requests[index]);
         predictionResponseSchema.parse(prediction);
@@ -176,24 +188,23 @@ export async function prepareReplay(input: {
       id,
       contract: replayContract,
       game: input.replay.game,
-      publishedAt: now().toISOString(),
+      publishedAt,
       modelArtifact: input.modelArtifact,
       sourceUrl: `https://statsapi.mlb.com/api/v1.1/game/${input.replay.game.gamePk}/feed/live`,
       pitches: items,
+      totalPitches: pitches.length,
     };
     assertEdition(edition);
     await ownsLease();
-    if (
-      !(await input.storage.write(
-        { key: `edition:${id}`, revision: 0, value: edition },
-        null,
-      ))
-    )
-      throw new Error("Replay edition already exists.");
+    await saveEdition(input.storage, edition);
     return edition;
   } finally {
     await input.storage.write(
-      { key: lockKey, revision: revision + 1, value: { until: 0 } },
+      {
+        key: lockKey,
+        revision: revision + 1,
+        value: { until: 0, publishedAt },
+      },
       revision,
     );
   }
@@ -201,10 +212,10 @@ export async function prepareReplay(input: {
 
 export async function publishReplay(storage: Storage, edition: ReplayEdition) {
   assertEdition(edition);
-  const stored = await storage.read<ReplayEdition>(`edition:${edition.id}`);
+  const stored = await readEdition(storage, edition.id);
   if (!stored) throw new Error("Save the complete edition before publication.");
-  assertEdition(stored.value);
-  if (!isDeepStrictEqual(stored.value, edition))
+  assertEdition(stored);
+  if (!isDeepStrictEqual(stored, edition))
     throw new Error("The saved edition differs from the reviewed edition.");
   await indexGameEdition(storage, edition);
   const previous = await storage.read<{ editionId: string }>("featured");
@@ -229,8 +240,8 @@ export async function indexGameEdition(
   edition: ReplayEdition,
 ) {
   assertEdition(edition);
-  const stored = await storage.read<ReplayEdition>(`edition:${edition.id}`);
-  if (!stored || !isDeepStrictEqual(stored.value, edition))
+  const stored = await readEdition(storage, edition.id);
+  if (!stored || !isDeepStrictEqual(stored, edition))
     throw new Error("Save the complete edition before indexing the game.");
   const key = gameEditionKey(edition.game.gamePk);
   const previous = await storage.read<{ editionId: string }>(key);

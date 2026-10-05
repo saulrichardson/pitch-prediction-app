@@ -1,6 +1,7 @@
 export const site = {
   name: "Pitch Prediction App",
-  description: "Real-game next-pitch prediction and actual reveal scoring.",
+  description:
+    "Replay every pitch of the Dodgers’ ten most recent completed games with real model forecasts.",
   url: "https://baseball.saulrichardson.io",
 };
 
@@ -19,7 +20,9 @@ export function getSiteUrl() {
   }
 
   if (url.protocol !== "https:" && url.hostname !== "localhost") {
-    throw new Error("NEXT_PUBLIC_SITE_URL must use https outside local development.");
+    throw new Error(
+      "NEXT_PUBLIC_SITE_URL must use https outside local development.",
+    );
   }
 
   return url;

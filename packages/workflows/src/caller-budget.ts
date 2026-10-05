@@ -1,7 +1,7 @@
 import type { Storage } from "@pitch/db";
 
 export const callerPreparationLimits = {
-  dailyGames: 4,
+  dailyGames: 10,
   monthlyGames: 20,
 } as const;
 
@@ -27,7 +27,11 @@ export async function reserveCallerPreparation(
   const day = now.toISOString().slice(0, 10);
   const key = `preparation-caller:${month}:${callerId}`;
 
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (
+    let attempt = 0;
+    attempt <= callerPreparationLimits.dailyGames;
+    attempt++
+  ) {
     const record = await storage.read<CallerPreparationRecord>(key);
     const current = record?.value ?? { total: 0, days: {} };
     const games = current.days[day] ?? [];

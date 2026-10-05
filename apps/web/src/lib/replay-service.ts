@@ -5,36 +5,92 @@ import {
   editionSummary,
   ReplayConflict,
   replayView,
+  replayContract,
   type ReplayCommand,
   type ReplayEdition,
   type ReplaySession,
 } from "@pitch/domain";
 import { conflict, notFound, serviceUnavailable } from "./http";
-import { indexGameEdition } from "@pitch/workflows";
+import { indexGameEdition, readEdition } from "@pitch/workflows";
+
+// Validated immutable editions only; every session/cursor still uses durable reads.
+const editionCaches = new WeakMap<Storage, Map<string, ReplayEdition>>();
 import type { CatalogGame } from "@pitch/domain";
 
 export function replayService(storage: Storage, now = () => new Date()) {
-  const editionKey = (id: string) => `edition:${id}`;
+  const cache = editionCaches.get(storage) ?? new Map<string, ReplayEdition>();
+  editionCaches.set(storage, cache);
   const sessionKey = (id: string, workspace: string) =>
     `session:${workspace}:${id}`;
   async function edition(id: string): Promise<ReplayEdition> {
-    const record = await storage.read<ReplayEdition>(editionKey(id));
-    if (!record)
+    let prepared = cache.get(id);
+    if (!prepared) {
+      prepared = (await readEdition(storage, id)) ?? undefined;
+      if (prepared) {
+        if (cache.size >= 4) cache.delete(cache.keys().next().value!);
+        cache.set(id, prepared);
+      }
+    }
+    if (!prepared)
       throw notFound(
         "This replay is no longer available.",
         "edition_not_found",
       );
-    assertEdition(record.value);
-    return record.value;
+    if (prepared.contract !== replayContract) {
+      const indexed = await storage.read<{ editionId: string }>(
+        `game-edition:${prepared.game.gamePk}`,
+      );
+      if (indexed && indexed.value.editionId !== id) {
+        const fullGame = await edition(indexed.value.editionId);
+        if (
+          fullGame.contract === replayContract &&
+          fullGame.game.gamePk === prepared.game.gamePk
+        )
+          return fullGame;
+      }
+    }
+    return prepared;
   }
-  async function load(id: string, workspace: string) {
+  async function load(
+    id: string,
+    workspace: string,
+  ): Promise<{ session: ReplaySession; edition: ReplayEdition }> {
     const record = await storage.read<ReplaySession>(sessionKey(id, workspace));
     if (!record || record.value.workspaceId !== workspace)
       throw notFound("Start this replay to continue.", "session_not_found");
-    return {
-      session: record.value,
-      edition: await edition(record.value.editionId),
-    };
+    const prepared = await edition(record.value.editionId);
+    if (prepared.id !== record.value.editionId) {
+      const old = await readEdition(storage, record.value.editionId);
+      if (!old)
+        throw notFound(
+          "This replay is no longer available.",
+          "edition_not_found",
+        );
+      const previousPitch =
+        old.pitches[Math.floor(record.value.step / 2)].actual;
+      const index = prepared.pitches.findIndex(
+        (item) => item.actual.gamePitchIndex === previousPitch.gamePitchIndex,
+      );
+      if (index < 0)
+        throw new Error("Saved place is missing from the full game.");
+      const migrated = {
+        ...record.value,
+        editionId: prepared.id,
+        step: index * 2 + (record.value.step % 2),
+        revision: record.revision + 1,
+        lastCommand: null,
+        updatedAt: now().toISOString(),
+      };
+      if (
+        !(await storage.write(
+          { ...record, revision: migrated.revision, value: migrated },
+          record.revision,
+        ))
+      )
+        return load(id, workspace);
+      return { session: migrated, edition: prepared };
+    }
+    return { session: record.value, edition: prepared };
   }
   return {
     async featured() {
@@ -51,7 +107,7 @@ export function replayService(storage: Storage, now = () => new Date()) {
       const timestamp = now();
       const session: ReplaySession = {
         id,
-        editionId: id,
+        editionId: prepared.id,
         workspaceId: workspace,
         revision: 0,
         step: 0,
@@ -159,21 +215,17 @@ export async function getReplayService() {
           );
           await indexGameEdition(storage, extra);
         }
-        for (const [date, games] of Object.entries(
-          edition.testCatalog.schedules,
-        )) {
-          await storage.write(
-            {
-              key: `schedule:${date}`,
-              revision: 0,
-              value: {
-                fetchedAt: new Date(Date.now() + 86400_000).toISOString(),
-                games,
-              },
+        await storage.write(
+          {
+            key: "schedule:dodgers-recent-v1",
+            revision: 0,
+            value: {
+              fetchedAt: new Date(Date.now() + 86400_000).toISOString(),
+              games: Object.values(edition.testCatalog.schedules).flat(),
             },
-            null,
-          );
-        }
+          },
+          null,
+        );
       }
     })();
     await localEditionLoaded;
