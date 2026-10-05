@@ -48,3 +48,30 @@ phone/desktop browser suite. PostgreSQL coverage runs separately in CI.
 Keep old editions and session ownership intact. A session-not-found 404 for a
 new browser is followed by an idempotent start of the same edition; it is not
 an unavailable edition or a reason to substitute a different game.
+
+## Production receipt
+
+Application revision `6f2806668825dde3cf273a7a4a301b3e235179dc` is deployed as
+`serverless-6f2806668825`, web version 3. CloudFormation reports
+`UPDATE_COMPLETE`; CloudFront is deployed and the live alias has one READY
+provisioned instance. The release image digest is
+`sha256:639d4b02daf8039f788f0ea7d239de46e0f3e35dd2045f3f63a06c5161c120cd`.
+
+The original three-pitch link was completed on the public site. The new primary
+action opened Games, returning preserved pitch 3, the separate restart returned
+to the same first forecast, and a second completion plus desktop refresh kept
+the completed cursor. At 390 × 844 the primary action remained in view with no
+horizontal overflow. Desktop refresh produced no console warnings or errors.
+An invalid explicit link showed its validation message without substitution.
+All seven live HTTP replay check groups and the seven-date, 17-game catalog
+check passed. Six replay commands measured 75–100 ms (median 97 ms); this is a
+smoke sample, not a load test.
+
+The [application CI run](https://github.com/saulrichardson/pitch-prediction-app/actions/runs/37332075770)
+passed 112 TypeScript tests including PostgreSQL, 30 model-service tests, and
+29 browser checks (one desktop-only omission of the phone-specific test).
+The [packaging CI run](https://github.com/saulrichardson/pitch-prediction-app/actions/runs/37333356847)
+also passed the new production image build; its final browser result was still
+pending when this receipt was written. Rollback configuration, the old web
+version/image identity and private verification output remain in ignored
+`.cache/replay-repair-2026-10-05/`. Existing editions and sessions were preserved.
