@@ -1,6 +1,7 @@
-node_modules
-.next
-cdk.out
+**/node_modules
+**/.next
+**/cdk.out
+**/*.tsbuildinfo
 coverage
 playwright-report
 .playwright-mcp

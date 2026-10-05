@@ -24,6 +24,14 @@ The GitHub deployment workflow now calls the same web release script as local
 releases. Its former direct CDK step omitted publishing the immutable S3
 release document/assets and the warm-alias verification.
 
+Release validation also exposed local build contamination: Docker copied
+557 MB of host Next.js output and omitted dependencies installed below the web
+workspace in its dependency stage. Recursive Docker exclusions now remove host
+dependencies, Next.js/CDK output and TypeScript build caches; the builder copies
+the full clean dependency stage. The clean Linux production image built
+successfully after these fixes. CI now builds that image as well as the normal
+application, so a clean checkout exercises the actual release packaging.
+
 Five existing workflow tests expired their September fixtures against the real
 October storage clock. Their injected storage and service clocks now agree,
 including simulated time advancement; the assertions and production TTL rules

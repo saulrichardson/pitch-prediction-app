@@ -40,6 +40,8 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run verify:static
+      - name: Build production web image
+        run: docker build --platform linux/amd64 --tag pitch-replay-ci --file Dockerfile.web-lambda .
       - run: npm run verify:local
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
