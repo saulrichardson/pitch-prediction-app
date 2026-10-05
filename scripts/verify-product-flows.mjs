@@ -83,7 +83,8 @@ await check("readiness validates a complete replay without disclosing internals"
   assert.deepEqual(ready.payload, { status: "ok" });
   const featured = await owner("/api/replays");
   edition = featured.payload.edition;
-  assert.ok(edition.pitchCount >= 3 && edition.pitchCount <= 8);
+  assert.equal(edition.scope, "game");
+  assert.ok(Number.isInteger(edition.pitchCount) && edition.pitchCount >= 1);
   assert.equal(featured.cache, "public, max-age=0, s-maxage=30");
   assert.equal(featured.setsCookie, false);
   assert.deepEqual((await stranger("/api/replays")).payload, featured.payload);
@@ -193,6 +194,8 @@ await check(
       await act(replay.phase === "forecast" ? "reveal" : "next");
       if (replay.phase === "forecast") hidden(replay);
     }
+    assert.equal(replay.index, edition.pitchCount - 1);
+    assert.equal(replay.step, edition.pitchCount * 2 - 1);
     assert.equal(replay.history.length, edition.pitchCount);
     assert.equal(replay.summary.pitches, edition.pitchCount);
     assert.ok(replay.actual);
