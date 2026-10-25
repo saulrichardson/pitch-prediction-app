@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "aws-cdk": "^2.1141.0",
-    "aws-cdk-lib": "^2.253.1",
+    "aws-cdk-lib": "^2.274.0",
     "constructs": "^10.4.3",
     "tsx": "^4.21.0"
   },

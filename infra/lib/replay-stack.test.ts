@@ -48,7 +48,9 @@ describe("prepared replay web infrastructure", () => {
       template.findResources("AWS::Lambda::Permission"),
     );
     const invoke = permissions.find(
-      (p) => p.Properties.Action === "lambda:InvokeFunction",
+      (p) =>
+        p.Properties.Action === "lambda:InvokeFunction" &&
+        p.Properties.FunctionName?.Ref === aliasId,
     );
     expect(JSON.stringify(invoke?.Properties.FunctionName)).toContain(aliasId);
     expect(invoke?.Properties.InvokedViaFunctionUrl).toBe(true);
