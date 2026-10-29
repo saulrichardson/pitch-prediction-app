@@ -17,6 +17,7 @@ describe("prepared replay web infrastructure", () => {
       FunctionName: "pitch-sequence-serverless-web",
       MemorySize: 2048,
       ReservedConcurrentExecutions: 10,
+      Environment: { Variables: { AWS_LWA_READINESS_CHECK_PATH: "/ready" } },
     });
     const [aliasId, alias] = Object.entries(
       template.findResources("AWS::Lambda::Alias"),
@@ -95,6 +96,10 @@ describe("prepared replay web infrastructure", () => {
       const [distributionId, distribution] = Object.entries(
         template.findResources("AWS::CloudFront::Distribution"),
       )[0];
+      template.hasResourceProperties("AWS::Lambda::Function", {
+        FunctionName: "pitch-sequence-serverless-web",
+        Environment: { Variables: { AWS_LWA_READINESS_CHECK_PATH: "/health" } },
+      });
       expect(distribution.Properties.DistributionConfig.Aliases ?? []).toEqual(
         [],
       );

@@ -163,6 +163,10 @@ missing controls, or reported spend at the limit. Model SnapStart/checkpoint pac
 remain the existing operating model and require actual AWS verification on
 release.
 
+Normal web releases use `/ready` as the Lambda adapter startup check. A warm
+instance loads and validates its featured edition before accepting viewer requests.
+Initial bootstrap uses `/health` until durable publication is available.
+
 The web release script creates the retained private asset bucket, extracts the
 prerendered document and assets from the exact container, uploads them, then
 updates CloudFront. A viewer-request function selects the immutable release

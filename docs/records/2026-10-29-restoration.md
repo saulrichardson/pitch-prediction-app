@@ -54,6 +54,13 @@ reviewed edition JSON privately; it includes the original model provenance.
 The CDK CLI must support the installed cloud assembly schema. Restoration
 upgraded it to 2.1146.1 after the prior locked CLI rejected schema 55.
 
+## Startup performance
+
+Normal web versions use `/ready` as the Lambda Web Adapter readiness endpoint,
+so the featured edition is loaded before provisioned capacity becomes ready.
+Bootstrap alone uses `/health` so initial state publication does not block
+resource creation. The web role still never invokes the model.
+
 ## Verification
 
 The budget-scope tests reject absent scope, other projects and extra filters.

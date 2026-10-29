@@ -117,6 +117,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         DYNAMODB_TABLE_NAME: table.tableName,
         APP_SECRET_JSON: appSecret.secretValue.toString(),
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1",
+        // A warm instance must have loaded its replay before accepting traffic.
+        AWS_LWA_READINESS_CHECK_PATH:
+          process.env.BOOTSTRAP_WEB === "true" ? "/health" : "/ready",
       },
     });
 
