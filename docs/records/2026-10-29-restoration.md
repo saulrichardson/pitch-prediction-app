@@ -72,3 +72,59 @@ table and log groups during rollback; they were imported back into the rebuilt
 stack using their original logical IDs before the corrected two-phase release.
 
 Production evidence and final release receipt are added after live verification.
+
+## Production receipt
+
+The original URL, https://baseball.saulrichardson.io, now resolves to
+`d11r4x1wbhahas.cloudfront.net` (distribution `E2DSBR5GO2JUHR`). HTTPS,
+private S3 assets, the authenticated API origin, and the completed CloudFormation
+update were verified. CloudFront reports Deployed. The old CNAME was replaced
+in Cloudflare with DNS-only delivery.
+
+Web version 7 uses image `restore-20261029`, digest
+`sha256:742880d22473a8fb89894e61bf541884690d0052bbc7a474b5e31614e4c4c65d`,
+with `/ready` startup, one READY 2 GB provisioned instance, and concurrency ten.
+The startup logs show replay validation completing before initialization finishes.
+The warm-web verifier passed the qualified alias/OAC/origin checks. CloudWatch
+recorded 60 provisioned invocations at 14:03 EDT and seven at 14:06 EDT.
+
+Model live version 17 uses `restore-20261029`, digest
+`sha256:807cf7d0f4e8280379f8cec9fa347eadb93bf9447de11c35035a361d4e861360`.
+Real AWS health, first-pitch inference, and the saved longest-history request
+returned the real xLSTM model and eight valid samples. Response schema checks
+passed. Model concurrency remains one, memory 1 GB, and SnapStart enabled.
+
+Restored editions include the 320-pitch October 4 ATL–LAD feature
+`5c3d7d605c78f2f991fdf2451f2e4e669e91d647e2d239c665a7ca83c6de98c2`
+and the 293-pitch September 27 LAD–SF game
+`2aedcec7ab8d26e6cb226277db7e16d66c3697d1bf86db23c6eb680a71de4ded`.
+The full production HTTP verifier passed seven workflow checks and all 640
+commands through the featured game: 182 ms median, 500 ms p95, 922 ms maximum.
+These timings were measured through the replacement distribution hostname;
+the original custom host subsequently passed HTTPS, readiness, catalog,
+opening and reveal in a real browser. Phone layout, advancing, and refresh
+recovery were also inspected. The custom-host browser had zero console errors
+or warnings. Normal first-time preparation of unsaved games remains a separate
+background workflow; replay navigation never calls the model.
+
+Local verification passed 126 application tests (the PostgreSQL integration
+case is intentionally conditional), 34 model tests, 31 desktop/phone browser
+tests (one phone case is intentionally skipped), typecheck, lint, production
+build, static payload checks, HTTP workflows, and infrastructure synthesis.
+The corrected bootstrap/startup tests passed afterward. The initial payload is
+271,557 compressed JavaScript bytes.
+
+The $250 monthly / $25 daily budgets have the exact Project filter, and the
+Project cost-allocation tag is active. The monthly actual $250 cutoff targets
+SNS; the guard targets the real distribution ID and passed a read-only live
+check with an armed latch. Warning/forecast notifications are installed, and
+the operations email subscription is confirmed. Reported tagged spend was $0;
+this is delayed billing data, not a claim that restoration cost nothing.
+
+GitHub CI run 40925940072 passed application checks but its independent Docker
+build was blocked by anonymous public ECR `429 Too Many Requests / Data limit
+exceeded` when pulling the upstream Lambda adapter. A prior failed run's retry
+hit the same external limit. The production image built and deployed successfully
+locally; the live checks above are separate evidence. Do not describe CI as green.
+Exact review JSON, release logs, import templates, browser snapshots and timing
+results are private local artifacts under the restoration chat's `work/` folder.
