@@ -152,8 +152,10 @@ concurrency 0, web reserved concurrency 10 with one 2 GB provisioned instance on
 the published `live` alias, DynamoDB throughput limits, one-day
 Lambda logs, and the configured CloudFront country allowlist. Web timeout is 30
 seconds; the dedicated preparation worker runs separately. AWS budget alerts are
-paired with a latched $50 monthly account-spend shutdown. Warnings fire at $25,
-$40, a $50 month-end forecast, and $2 daily actual spend. The independent cost
+paired with a latched $250 monthly app-spend shutdown, filtered to
+`Project=PitchPredictionApp`. All application stacks share that active cost-allocation
+tag; unrelated account spend cannot trip the app guard. Warnings fire at $100,
+$200, a $250 month-end forecast, and $25 daily actual spend. The independent cost
 guard removes provisioned capacity, stops all three application functions, and
 disables CloudFront traffic. Billing lag and retained storage/snapshots prevent
 an exact hard billing cap. Routine releases fail closed on a tripped latch,
@@ -171,8 +173,9 @@ and mutations cannot become shared responses.
 CloudFront's API origin is the IAM Function URL attached to the warm `live`
 alias; targeting `$LATEST` would bypass provisioned capacity. The release script
 verifies the deployed origin and one READY provisioned execution environment.
-The [warm web and cost-control record](records/2026-09-13-warm-web-cost-controls.md)
-owns budget setup, alerts, shutdown limitations, and explicit recovery.
+The [restoration record](records/2026-10-29-restoration.md) owns the current
+app-specific budget and rebuild procedure. The [warm web record](records/2026-09-13-warm-web-cost-controls.md)
+explains the retained shutdown mechanics and explicit recovery.
 
 The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each
 prediction. It evaluates the prefix once, then one new token at a time using

@@ -9,7 +9,11 @@ import {
   type Notification,
   type Subscriber,
 } from "@aws-sdk/client-budgets";
-import { costPolicy } from "../infra/lib/cost-policy";
+import {
+  costPolicy,
+  costFilters,
+  matchesCostScope,
+} from "../infra/lib/cost-policy";
 
 const accountId = process.env.COST_ACCOUNT_ID;
 const cutoffTopicArn = process.env.COST_CUTOFF_TOPIC_ARN;
@@ -59,10 +63,10 @@ for (const [name, amount, desired] of [
   if (
     !budget ||
     budget.BudgetType !== "COST" ||
-    Object.keys(budget.CostFilters ?? {}).length ||
+    !matchesCostScope(budget.CostFilters) ||
     budget.FilterExpression
   )
-    throw new Error(`Expected existing account-wide cost budget: ${name}`);
+    throw new Error(`Expected existing app-tagged cost budget: ${name}`);
   const { Notifications: current = [] } = await client.send(
     new DescribeNotificationsForBudgetCommand({
       AccountId: accountId,
@@ -119,6 +123,7 @@ for (const [name, amount, desired] of [
         BudgetType: budget.BudgetType,
         TimeUnit: budget.TimeUnit,
         CostTypes: budget.CostTypes,
+        CostFilters: costFilters,
         TimePeriod: budget.TimePeriod,
       },
     }),

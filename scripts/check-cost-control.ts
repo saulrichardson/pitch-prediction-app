@@ -2,6 +2,7 @@ import { BudgetsClient, DescribeBudgetCommand } from "@aws-sdk/client-budgets";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import {
   costPolicy,
+  matchesCostScope,
   parseCostState,
   validateSpend,
 } from "../infra/lib/cost-policy";
@@ -28,13 +29,13 @@ const { Budget: budget } = await budgets.send(
 if (
   budget?.TimeUnit !== "MONTHLY" ||
   budget.BudgetType !== "COST" ||
-  Object.keys(budget.CostFilters ?? {}).length ||
+  !matchesCostScope(budget.CostFilters) ||
   budget.FilterExpression ||
   Number(budget.BudgetLimit?.Amount) !== costPolicy.monthlyLimitUsd ||
   budget.BudgetLimit?.Unit !== "USD"
 )
   throw new Error(
-    "Deployment requires the account-wide $50 monthly cost budget. Run scripts/configure-cost-budgets.ts.",
+    `Deployment requires the app-tagged $${costPolicy.monthlyLimitUsd} monthly cost budget. Run scripts/configure-cost-budgets.ts.`,
   );
 const actual = validateSpend(
   budget.CalculatedSpend?.ActualSpend?.Amount,
@@ -45,5 +46,5 @@ if (actual >= costPolicy.monthlyLimitUsd)
     `Deployment blocked: monthly spend is $${actual.toFixed(2)}.`,
   );
 console.log(
-  `Cost controls armed: $${actual.toFixed(2)} reported against the $50 monthly limit.`,
+  `Cost controls armed: $${actual.toFixed(2)} reported against the $${costPolicy.monthlyLimitUsd} monthly limit.`,
 );

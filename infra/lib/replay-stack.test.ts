@@ -79,6 +79,33 @@ describe("prepared replay web infrastructure", () => {
       expect.arrayContaining(permissionIds),
     );
   });
+  it("bootstraps a deleted distribution without circular permission dependencies", () => {
+    process.env.BOOTSTRAP_WEB = "true";
+    try {
+      const template = Template.fromStack(
+        new PitchSequenceServerlessStack(new cdk.App(), "BootstrapTest", {
+          env: { account: "123456789012", region: "us-east-1" },
+        }),
+      );
+      const [distributionId, distribution] = Object.entries(
+        template.findResources("AWS::CloudFront::Distribution"),
+      )[0];
+      const permissions = Object.entries(
+        template.findResources("AWS::Lambda::Permission"),
+      ).filter(
+        ([, p]) => p.Properties.Principal === "cloudfront.amazonaws.com",
+      );
+      expect(permissions.length).toBeGreaterThan(0);
+      for (const [permissionId, permission] of permissions) {
+        expect(JSON.stringify(permission.Properties.SourceArn)).toContain(
+          distributionId,
+        );
+        expect(distribution.DependsOn ?? []).not.toContain(permissionId);
+      }
+    } finally {
+      delete process.env.BOOTSTRAP_WEB;
+    }
+  });
   it("keeps inference out of the web role and preserves origin ownership", () => {
     const stack = new PitchSequenceServerlessStack(
       new cdk.App(),

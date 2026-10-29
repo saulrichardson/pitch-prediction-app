@@ -4,8 +4,10 @@ import { PitchSequenceModelStack } from "../lib/pitch-sequence-model-stack";
 import { PitchSequenceServerlessStack } from "../lib/pitch-sequence-serverless-stack";
 import { WebAssetsStack } from "../lib/web-assets-stack";
 import { CostControlsStack } from "../lib/cost-controls-stack";
+import { costPolicy } from "../lib/cost-policy";
 
 const app = new cdk.App();
+cdk.Tags.of(app).add("Project", costPolicy.projectTag);
 
 const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,

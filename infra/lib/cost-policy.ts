@@ -1,11 +1,12 @@
-// Account-wide spend is conservative: this app stops even if another service
-// caused the overage. Only this app's resources can be changed by the guard.
+// Budget scope and infrastructure tags must stay aligned: unrelated account
+// spending must never shut down this app.
 export const costPolicy = {
-  monthlyBudgetName: "My Monthly Cost Budget",
-  monthlyLimitUsd: 50,
-  monthlyWarningsUsd: [25, 40],
-  dailyBudgetName: "Daily Cost Spike Budget",
-  dailyLimitUsd: 2,
+  monthlyBudgetName: "Pitch Replay Monthly Cost Budget",
+  projectTag: "PitchPredictionApp",
+  monthlyLimitUsd: 250,
+  monthlyWarningsUsd: [100, 200],
+  dailyBudgetName: "Pitch Replay Daily Cost Budget",
+  dailyLimitUsd: 25,
   stateParameter: "/pitch-replay/cost-control",
   functionName: "pitch-replay-cost-control",
   applicationFunctions: [
@@ -14,6 +15,20 @@ export const costPolicy = {
     "pitch-sequence-serverless-model-lambda",
   ],
 } as const;
+
+export const costFilters = {
+  TagKeyValue: [`user:Project$${costPolicy.projectTag}`],
+};
+
+export function matchesCostScope(
+  filters: Record<string, string[]> | undefined,
+): boolean {
+  return (
+    Object.keys(filters ?? {}).length === 1 &&
+    filters?.TagKeyValue?.length === 1 &&
+    filters.TagKeyValue[0] === costFilters.TagKeyValue[0]
+  );
+}
 
 export type CostState =
   | { status: "armed" }

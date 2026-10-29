@@ -41,8 +41,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     );
     const customDomainName = process.env.CUSTOM_DOMAIN_NAME;
     const certificateArn = process.env.ACM_CERTIFICATE_ARN;
-    // This stack updates the existing production distribution. Its ID is
-    // supplied by the release script so new OAC permissions precede cutover.
+    // Normal releases supply the existing distribution ID so origin permissions
+    // precede cutover. BOOTSTRAP_WEB=true creates permissions after a new
+    // distribution exists; deploy again with its ID before exposing public DNS.
     const existingDistributionId = new cdk.CfnParameter(
       this,
       "DistributionId",
@@ -420,18 +421,25 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
         principal: "cloudfront.amazonaws.com",
         action: "lambda:InvokeFunction",
         functionName: liveAlias.functionArn,
-        sourceArn: distributionArn,
+        sourceArn:
+          process.env.BOOTSTRAP_WEB === "true"
+            ? distribution.distributionArn
+            : distributionArn,
         invokedViaFunctionUrl: true,
       },
     );
     const distributionResource = distribution.node
       .defaultChild as cloudfront.CfnDistribution;
-    distributionResource.addDependency(invokePermission);
+    if (process.env.BOOTSTRAP_WEB !== "true")
+      distributionResource.addDependency(invokePermission);
     // The OAC helper normally references the distribution, which delays its
     // permission until after a distribution update. Authorize this known
     // distribution first, then allow CloudFormation to change the API origin.
     for (const permission of distribution.node.findAll()) {
-      if (permission instanceof lambda.CfnPermission) {
+      if (
+        permission instanceof lambda.CfnPermission &&
+        process.env.BOOTSTRAP_WEB !== "true"
+      ) {
         permission.sourceArn = distributionArn;
         distributionResource.addDependency(permission);
       }
