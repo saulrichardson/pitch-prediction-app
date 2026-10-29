@@ -38,7 +38,11 @@ images. Bootstrap the private asset stack with the placeholder distribution ID
 `BOOTSTRAP` (which authorizes no real distribution). For initial serverless
 stack creation only, set `BOOTSTRAP_WEB=true`: Lambda permissions reference the
 new distribution and are created afterward, avoiding a circular dependency.
-Normal releases retain permission-before-cutover ordering using the known ID.
+Bootstrap also defers provisioned capacity until the normal update so CDN
+creation can finish before warm-capacity allocation. Bootstrap omits the custom alias: CloudFront rejects creation while DNS still
+points at a deleted distribution. Set DNS to the new distribution before the
+normal update attaches the custom certificate and alias. Normal releases retain
+permission-before-cutover ordering using the known ID.
 
 After initial stack creation, publish reviewed real-model editions, upload the
 exact image's static assets, update the assets and cost-control stacks with the
@@ -55,4 +59,9 @@ upgraded it to 2.1146.1 after the prior locked CLI rejected schema 55.
 The budget-scope tests reject absent scope, other projects and extra filters.
 The shutdown boundary tests use $250. The bootstrap infrastructure test asserts
 permissions reference the new distribution and do not create a dependency cycle.
+An initial custom-alias creation failed because the stale Cloudflare CNAME
+referenced the deleted distribution. CloudFormation retained the restored
+table and log groups during rollback; they were imported back into the rebuilt
+stack using their original logical IDs before the corrected two-phase release.
+
 Production evidence and final release receipt are added after live verification.

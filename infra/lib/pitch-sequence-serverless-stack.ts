@@ -203,7 +203,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const liveAlias = new lambda.Alias(this, "WebLiveAlias", {
       aliasName: "live",
       version: webFunction.currentVersion,
-      provisionedConcurrentExecutions: 1,
+      ...(process.env.BOOTSTRAP_WEB !== "true"
+        ? { provisionedConcurrentExecutions: 1 }
+        : {}),
     });
     // Provisioned capacity serves qualified invocations only. CloudFront must
     // use the alias URL, otherwise requests still cold-start on $LATEST.
@@ -394,7 +396,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         },
       },
-      ...(customDomainName && certificate
+      ...(customDomainName &&
+      certificate &&
+      process.env.BOOTSTRAP_WEB !== "true"
         ? {
             domainNames: [customDomainName],
             certificate,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as cdk from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { runInNewContext } from "node:vm";
@@ -80,7 +80,12 @@ describe("prepared replay web infrastructure", () => {
     );
   });
   it("bootstraps a deleted distribution without circular permission dependencies", () => {
-    process.env.BOOTSTRAP_WEB = "true";
+    vi.stubEnv("BOOTSTRAP_WEB", "true");
+    vi.stubEnv("CUSTOM_DOMAIN_NAME", "baseball.example.com");
+    vi.stubEnv(
+      "ACM_CERTIFICATE_ARN",
+      "arn:aws:acm:us-east-1:123456789012:certificate/test",
+    );
     try {
       const template = Template.fromStack(
         new PitchSequenceServerlessStack(new cdk.App(), "BootstrapTest", {
@@ -90,6 +95,13 @@ describe("prepared replay web infrastructure", () => {
       const [distributionId, distribution] = Object.entries(
         template.findResources("AWS::CloudFront::Distribution"),
       )[0];
+      expect(distribution.Properties.DistributionConfig.Aliases ?? []).toEqual(
+        [],
+      );
+      const [alias] = Object.values(
+        template.findResources("AWS::Lambda::Alias"),
+      );
+      expect(alias.Properties.ProvisionedConcurrencyConfig).toBeUndefined();
       const permissions = Object.entries(
         template.findResources("AWS::Lambda::Permission"),
       ).filter(
@@ -103,7 +115,7 @@ describe("prepared replay web infrastructure", () => {
         expect(distribution.DependsOn ?? []).not.toContain(permissionId);
       }
     } finally {
-      delete process.env.BOOTSTRAP_WEB;
+      vi.unstubAllEnvs();
     }
   });
   it("keeps inference out of the web role and preserves origin ownership", () => {
