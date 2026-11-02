@@ -54,3 +54,28 @@ budget. Do not delete data or snapshots to manufacture a zero bill.
 
 Sources: [AWS budget delays](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html),
 [Lambda pricing](https://aws.amazon.com/lambda/pricing/).
+
+## Production verification
+
+Both CloudFormation stacks completed their updates. The reviewed web diff removed
+only `WebLiveAlias.ProvisionedConcurrencyConfig`; the existing production image,
+version 7, static release, origin and domain were preserved. AWS lists no web
+provisioned allocations; reserved concurrency remains ten. CloudFront distribution
+`E2DSBR5GO2JUHR` is enabled and Deployed. The guard update completed successfully.
+
+Live budget reads confirmed $30 monthly and $2 daily with the exact Project filter.
+All four monthly notifications match the policy; the $20 actual notification has
+the cutoff SNS subscriber. Existing email recipients were preserved and the
+operations subscription is confirmed. The hourly EventBridge rule is enabled;
+all four cost/site alarms are OK. A read-only guard invocation reported
+`shouldStop:false`, `state:armed`, and $0.361 reported current-month spend.
+This is delayed billing data, not a final invoice estimate. The production shutdown
+was not deliberately triggered; boundary and partial-failure behavior passed tests.
+
+All 127 TypeScript tests passed, with one conditional PostgreSQL integration test
+skipped. Infrastructure and scripts type checks passed. The live alias/OAC and
+no-provisioned-capacity verifier passed. Homepage and readiness returned HTTP 200.
+The live catalog verifier passed. All seven live product checks passed, including
+completion of the 320-pitch game and restart; replay commands measured 149 ms
+median, 156 ms p95 and 285 ms maximum. No model inference was needed for those
+saved replay checks.
