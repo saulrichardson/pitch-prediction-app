@@ -33,7 +33,7 @@ const actual = (amount: number): Notification => ({
 });
 const monthly: Notification[] = [
   ...costPolicy.monthlyWarningsUsd.map(actual),
-  actual(costPolicy.monthlyLimitUsd),
+  actual(costPolicy.monthlyShutdownUsd),
   {
     NotificationType: "FORECASTED",
     ComparisonOperator: "GREATER_THAN",
@@ -135,7 +135,7 @@ for (const [name, amount, desired] of [
       ...emails,
       ...(name === costPolicy.monthlyBudgetName &&
       notification.NotificationType === "ACTUAL" &&
-      notification.Threshold === costPolicy.monthlyLimitUsd
+      notification.Threshold === costPolicy.monthlyShutdownUsd
         ? [{ SubscriptionType: "SNS" as const, Address: cutoffTopicArn }]
         : []),
     ];

@@ -41,10 +41,10 @@ const actual = validateSpend(
   budget.CalculatedSpend?.ActualSpend?.Amount,
   budget.CalculatedSpend?.ActualSpend?.Unit,
 );
-if (actual >= costPolicy.monthlyLimitUsd)
+if (actual >= costPolicy.monthlyShutdownUsd)
   throw new Error(
-    `Deployment blocked: monthly spend is $${actual.toFixed(2)}.`,
+    `Deployment blocked: monthly spend is $${actual.toFixed(2)}, at or above the $${costPolicy.monthlyShutdownUsd} shutdown threshold.`,
   );
 console.log(
-  `Cost controls armed: $${actual.toFixed(2)} reported against the $${costPolicy.monthlyLimitUsd} monthly limit.`,
+  `Cost controls armed: $${actual.toFixed(2)} reported against the $${costPolicy.monthlyLimitUsd} monthly budget; automatic shutdown at $${costPolicy.monthlyShutdownUsd}.`,
 );

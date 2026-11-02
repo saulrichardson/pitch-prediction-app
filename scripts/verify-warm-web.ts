@@ -8,7 +8,6 @@ import {
   CloudFrontClient,
   GetDistributionCommand,
 } from "@aws-sdk/client-cloudfront";
-import { setTimeout as delay } from "node:timers/promises";
 
 const FunctionName = "pitch-sequence-serverless-web";
 const Qualifier = "live";
@@ -43,32 +42,27 @@ if (
   !origin?.OriginAccessControlId
 )
   throw new Error(
-    "CloudFront is bypassing the warm alias or its origin access control.",
+    "CloudFront is bypassing the published alias or its origin access control.",
   );
 if (
   config.CacheBehaviors?.Items?.find(
     (item) => item.PathPattern === "/api/replays",
   )?.TargetOriginId !== origin.Id
 )
-  throw new Error("The summary API is bypassing the warm origin.");
+  throw new Error("The summary API is bypassing the published origin.");
 
-for (let attempt = 0; attempt < 90; attempt++) {
-  const capacity = await lambda.send(
+try {
+  await lambda.send(
     new GetProvisionedConcurrencyConfigCommand({ FunctionName, Qualifier }),
   );
-  if (capacity.RequestedProvisionedConcurrentExecutions !== 1)
-    throw new Error("Expected exactly one warm web instance.");
+  throw new Error("Paid idle web capacity must be absent for the $30 budget.");
+} catch (error) {
   if (
-    capacity.Status === "READY" &&
-    capacity.AllocatedProvisionedConcurrentExecutions === 1
-  ) {
-    console.log(
-      `Warm web verified: version ${alias.FunctionVersion}, one READY instance, CloudFront routes through live alias with OAC.`,
-    );
-    process.exit(0);
-  }
-  if (capacity.Status === "FAILED")
-    throw new Error(`Warm web failed: ${capacity.StatusReason}`);
-  await delay(5_000);
+    !(error instanceof Error) ||
+    error.name !== "ProvisionedConcurrencyConfigNotFoundException"
+  )
+    throw error;
 }
-throw new Error("Warm web did not become READY within 450 seconds.");
+console.log(
+  `On-demand web verified: version ${alias.FunctionVersion}, no provisioned capacity, CloudFront routes through live alias with OAC.`,
+);

@@ -3,10 +3,12 @@
 export const costPolicy = {
   monthlyBudgetName: "Pitch Replay Monthly Cost Budget",
   projectTag: "PitchPredictionApp",
-  monthlyLimitUsd: 250,
-  monthlyWarningsUsd: [100, 200],
+  monthlyLimitUsd: 30,
+  // Stop early: delayed billing and retained storage need headroom.
+  monthlyShutdownUsd: 20,
+  monthlyWarningsUsd: [10, 15],
   dailyBudgetName: "Pitch Replay Daily Cost Budget",
-  dailyLimitUsd: 25,
+  dailyLimitUsd: 2,
   stateParameter: "/pitch-replay/cost-control",
   functionName: "pitch-replay-cost-control",
   applicationFunctions: [
@@ -94,7 +96,7 @@ export async function enforceCostLimit(
   if (!Number.isFinite(actualUsd) || actualUsd < 0)
     throw new Error("Invalid actual spend; no shutdown decision was made.");
   const shouldStop =
-    previous.status === "tripped" || actualUsd >= costPolicy.monthlyLimitUsd;
+    previous.status === "tripped" || actualUsd >= costPolicy.monthlyShutdownUsd;
   if (dryRun || !shouldStop)
     return { dryRun, shouldStop, actualUsd, state: previous.status };
 

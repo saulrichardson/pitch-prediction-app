@@ -206,12 +206,9 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
     const liveAlias = new lambda.Alias(this, "WebLiveAlias", {
       aliasName: "live",
       version: webFunction.currentVersion,
-      ...(process.env.BOOTSTRAP_WEB !== "true"
-        ? { provisionedConcurrentExecutions: 1 }
-        : {}),
     });
-    // Provisioned capacity serves qualified invocations only. CloudFront must
-    // use the alias URL, otherwise requests still cold-start on $LATEST.
+    // On-demand compute avoids a fixed monthly capacity charge. Keep the
+    // published alias URL for stable, authenticated releases.
     const functionUrl = liveAlias.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });

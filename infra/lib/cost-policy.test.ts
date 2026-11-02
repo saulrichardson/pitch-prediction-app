@@ -10,7 +10,7 @@ import {
   type CostControlPorts,
 } from "./cost-policy";
 
-function fixture(spend = 250, initial: CostState = { status: "armed" }) {
+function fixture(spend = 20, initial: CostState = { status: "armed" }) {
   let state = initial;
   const ports: CostControlPorts = {
     readState: vi.fn(async () => state),
@@ -27,6 +27,16 @@ function fixture(spend = 250, initial: CostState = { status: "armed" }) {
 }
 
 describe("monthly cost shutdown", () => {
+  it("reserves billing headroom inside the $30 monthly budget", () => {
+    expect(costPolicy.monthlyLimitUsd).toBe(30);
+    expect(costPolicy.monthlyShutdownUsd).toBe(20);
+    expect(
+      costPolicy.monthlyWarningsUsd.every(
+        (v) => v < costPolicy.monthlyShutdownUsd,
+      ),
+    ).toBe(true);
+    expect(costPolicy.dailyLimitUsd).toBe(2);
+  });
   it("accepts only the exact app budget scope", () => {
     expect(matchesCostScope(costFilters)).toBe(true);
     expect(matchesCostScope(undefined)).toBe(false);
@@ -39,13 +49,13 @@ describe("monthly cost shutdown", () => {
     );
   });
   it("does no writes or shutdown below the limit", async () => {
-    const ports = fixture(249.999);
+    const ports = fixture(19.999);
     expect(await enforceCostLimit(ports)).toMatchObject({ shouldStop: false });
     expect(ports.saveState).not.toHaveBeenCalled();
     expect(ports.stopFunction).not.toHaveBeenCalled();
     expect(ports.notifyShutdown).not.toHaveBeenCalled();
   });
-  it("latches at exactly $250 before stopping only the app's functions and traffic", async () => {
+  it("latches at exactly $20 before stopping only the app's functions and traffic", async () => {
     const ports = fixture();
     await enforceCostLimit(ports);
     expect(
@@ -57,12 +67,12 @@ describe("monthly cost shutdown", () => {
     );
     expect(await ports.readState()).toMatchObject({
       status: "tripped",
-      actualUsd: 250,
+      actualUsd: 20,
       notifiedAt: ports.now(),
     });
   });
   it("attempts other stops after a partial failure and retries without losing the latch", async () => {
-    const ports = fixture(251);
+    const ports = fixture(21);
     vi.mocked(ports.stopFunction).mockRejectedValueOnce(
       new Error("AWS unavailable"),
     );
@@ -108,7 +118,7 @@ describe("monthly cost shutdown", () => {
     expect(await ports.readState()).toHaveProperty("notifiedAt");
   });
   it("allows a read-only live check even above the threshold", async () => {
-    const ports = fixture(260);
+    const ports = fixture(31);
     expect(await enforceCostLimit(ports, true)).toMatchObject({
       dryRun: true,
       shouldStop: true,

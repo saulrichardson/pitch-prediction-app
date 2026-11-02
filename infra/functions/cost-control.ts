@@ -154,7 +154,7 @@ export async function handler(event: { dryRun?: boolean } = {}) {
           new PublishCommand({
             TopicArn: required("ALERT_TOPIC_ARN"),
             Subject: "Pitch Replay paused: monthly cost limit reached",
-            Message: `AWS reported $${state.actualUsd.toFixed(2)} in monthly app costs. The $${costPolicy.monthlyLimitUsd} cost guard removed provisioned concurrency and set all three app functions to zero concurrency. CloudFront is disabling public traffic. Data, images and model snapshots are retained and can still incur storage charges. Billing is delayed, so costs can exceed the threshold. The stop is latched across month rollover; inspect costs and explicitly restore service using the repository runbook.`,
+            Message: `AWS reported $${state.actualUsd.toFixed(2)} in monthly app costs. The $${costPolicy.monthlyShutdownUsd} cost guard (for the $${costPolicy.monthlyLimitUsd} monthly budget) removed provisioned concurrency and set all three app functions to zero concurrency. CloudFront is disabling public traffic. Data, images and model snapshots are retained and can still incur storage charges. Billing is delayed, so costs can exceed the threshold. The stop is latched across month rollover; inspect costs and explicitly restore service using the repository runbook.`,
           }),
         );
       },

@@ -7,7 +7,7 @@ import { WebAssetsStack } from "./web-assets-stack";
 import { PitchSequenceModelStack } from "./pitch-sequence-model-stack";
 
 describe("prepared replay web infrastructure", () => {
-  it("routes the API through the alias that owns one warm instance", () => {
+  it("routes the API through a published alias without paid idle capacity", () => {
     const template = Template.fromStack(
       new PitchSequenceServerlessStack(new cdk.App(), "WarmTest", {
         env: { account: "123456789012", region: "us-east-1" },
@@ -23,9 +23,7 @@ describe("prepared replay web infrastructure", () => {
       template.findResources("AWS::Lambda::Alias"),
     )[0];
     expect(alias.Properties.Name).toBe("live");
-    expect(alias.Properties.ProvisionedConcurrencyConfig).toEqual({
-      ProvisionedConcurrentExecutions: 1,
-    });
+    expect(alias.Properties.ProvisionedConcurrencyConfig).toBeUndefined();
     expect(JSON.stringify(alias.Properties.FunctionVersion)).toContain(
       "CurrentVersion",
     );

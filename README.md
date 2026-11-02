@@ -129,9 +129,12 @@ operator and enforced atomically by the chosen storage. A reached limit shows
 the reset time. Saved replay navigation consumes no model budget.
 
 The deployment retains on-demand model concurrency 1, provisioned concurrency 0,
-web concurrency 10, bounded DynamoDB throughput, one-day logs, CloudFront origin
+web concurrency 10 with no provisioned capacity, bounded DynamoDB throughput, one-day logs, CloudFront origin
 access control, and the configured geography. Those controls constrain usage;
-they are not a billing guarantee.
+they are not a billing guarantee. The app-specific monthly budget is $30, with
+a latched automatic compute/traffic shutdown at $20 to reserve headroom for
+delayed billing and retained storage. Warnings are $10/$15 monthly, $30 forecast,
+and $2 daily. See the [current cost runbook](docs/records/2026-11-01-thirty-dollar-budget.md).
 
 See [product intent](docs/product-intent.md), [approach](docs/approach.md), and
 [project records](docs/records/) for the current operating model and rationale.

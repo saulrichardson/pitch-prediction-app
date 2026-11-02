@@ -148,14 +148,14 @@ feature age is visible through the game date. Run the CLI with an immutable
 model version/checkpoint and retain the review JSON.
 
 The low-cost deployment keeps model reserved concurrency 1, provisioned
-concurrency 0, web reserved concurrency 10 with one 2 GB provisioned instance on
+concurrency 0, web reserved concurrency 10 with on-demand 2 GB execution through
 the published `live` alias, DynamoDB throughput limits, one-day
 Lambda logs, and the configured CloudFront country allowlist. Web timeout is 30
 seconds; the dedicated preparation worker runs separately. AWS budget alerts are
-paired with a latched $250 monthly app-spend shutdown, filtered to
+paired with a latched $20 monthly app-spend shutdown within a $30 budget, filtered to
 `Project=PitchPredictionApp`. All application stacks share that active cost-allocation
-tag; unrelated account spend cannot trip the app guard. Warnings fire at $100,
-$200, a $250 month-end forecast, and $25 daily actual spend. The independent cost
+tag; unrelated account spend cannot trip the app guard. Warnings fire at $10,
+$15, a $30 month-end forecast, and $2 daily actual spend. The independent cost
 guard removes provisioned capacity, stops all three application functions, and
 disables CloudFront traffic. Billing lag and retained storage/snapshots prevent
 an exact hard billing cap. Routine releases fail closed on a tripped latch,
@@ -163,7 +163,7 @@ missing controls, or reported spend at the limit. Model SnapStart/checkpoint pac
 remain the existing operating model and require actual AWS verification on
 release.
 
-Normal web releases use `/ready` as the Lambda adapter startup check. A warm
+Normal web releases use `/ready` as the Lambda adapter startup check. Each
 instance loads and validates its featured edition before accepting viewer requests.
 Initial bootstrap uses `/health` until durable publication is available.
 
@@ -174,11 +174,11 @@ document and favicon; hashed scripts, styles, and fonts go directly to S3.
 Old hashes stay available for open tabs and rollback. Private APIs bypass the
 CDN cache; the public summary's cache has zero minimum/default TTL so failures
 and mutations cannot become shared responses.
-CloudFront's API origin is the IAM Function URL attached to the warm `live`
-alias; targeting `$LATEST` would bypass provisioned capacity. The release script
-verifies the deployed origin and one READY provisioned execution environment.
-The [restoration record](records/2026-10-29-restoration.md) owns the current
-app-specific budget and rebuild procedure. The [warm web record](records/2026-09-13-warm-web-cost-controls.md)
+CloudFront's API origin is the IAM Function URL attached to the published `live`
+alias. The release script verifies the deployed origin and absence of paid idle
+capacity. Requests after inactivity can cold-start; static content stays on S3/CDN.
+The [cost record](records/2026-11-01-thirty-dollar-budget.md) owns the current
+budget. The [restoration record](records/2026-10-29-restoration.md) owns the rebuild procedure. The [warm web record](records/2026-09-13-warm-web-cost-controls.md)
 explains the retained shutdown mechanics and explicit recovery.
 
 The pinned pitchpredict 0.5.0 decoder caches recurrent state inside each

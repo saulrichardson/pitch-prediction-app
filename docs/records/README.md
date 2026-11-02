@@ -58,3 +58,5 @@ model.
 
 Use records for the reasoning that explains how the project got here and what
 future agents should remember.
+
+- [November 1: $30 monthly budget](2026-11-01-thirty-dollar-budget.md): $20 automatic stop, early alerts, on-demand web compute. Supersedes earlier spending and web provisioned-capacity settings.
