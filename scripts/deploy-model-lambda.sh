@@ -12,7 +12,7 @@ MODEL_LAMBDA_PROVISIONED_CONCURRENCY="${MODEL_LAMBDA_PROVISIONED_CONCURRENCY:-0}
 MODEL_LAMBDA_RESERVED_CONCURRENCY="${MODEL_LAMBDA_RESERVED_CONCURRENCY:-1}"
 MODEL_LAMBDA_TIMEOUT_SECONDS="${MODEL_LAMBDA_TIMEOUT_SECONDS:-300}"
 MODEL_LAMBDA_MEMORY_MB="${MODEL_LAMBDA_MEMORY_MB:-1024}"
-MODEL_LAMBDA_SNAPSTART="${MODEL_LAMBDA_SNAPSTART:-1}"
+MODEL_LAMBDA_SNAPSTART="${MODEL_LAMBDA_SNAPSTART:-0}"
 MODEL_ECR_REPOSITORY_NAME="${MODEL_ECR_REPOSITORY_NAME:-pitch-prediction-model-api}"
 MODEL_IMAGE_TAG="${MODEL_IMAGE_TAG:-model-serverless-$(git rev-parse --short=12 HEAD)}"
 
@@ -54,6 +54,8 @@ case "${MODEL_LAMBDA_ARCHITECTURE}" in
 esac
 
 account_id="$(aws sts get-caller-identity --query Account --output text)"
+export COST_ACCOUNT_ID="${account_id}"
+node --import tsx scripts/check-cost-control.ts
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 image_uri="${registry}/${MODEL_ECR_REPOSITORY_NAME}:${MODEL_IMAGE_TAG}"
 
@@ -118,6 +120,7 @@ variables.update(
 print(json.dumps({"Variables": variables}, separators=(",", ":")))
 PY
 
+node --import tsx scripts/check-cost-control.ts
 aws lambda put-function-concurrency \
   --function-name "${MODEL_LAMBDA_FUNCTION_NAME}" \
   --reserved-concurrent-executions "${MODEL_LAMBDA_RESERVED_CONCURRENCY}" >/dev/null

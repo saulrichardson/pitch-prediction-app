@@ -3,12 +3,13 @@
 export const costPolicy = {
   monthlyBudgetName: "Pitch Replay Monthly Cost Budget",
   projectTag: "PitchPredictionApp",
-  monthlyLimitUsd: 30,
+  monthlyLimitUsd: 10,
   // Stop early: delayed billing and retained storage need headroom.
-  monthlyShutdownUsd: 20,
-  monthlyWarningsUsd: [10, 15],
+  monthlyShutdownUsd: 6,
+  monthlyWarningsUsd: [4, 5],
   dailyBudgetName: "Pitch Replay Daily Cost Budget",
-  dailyLimitUsd: 2,
+  dailyLimitUsd: 0.75,
+  webReservedConcurrency: 2,
   stateParameter: "/pitch-replay/cost-control",
   functionName: "pitch-replay-cost-control",
   applicationFunctions: [

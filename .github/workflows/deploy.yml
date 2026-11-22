@@ -15,7 +15,6 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY_NAME: pitch-prediction-app
   SERVERLESS_WEB_IMAGE_TAG: serverless-${{ github.sha }}
-  SERVERLESS_WEB_RESERVED_CONCURRENCY: "10"
   MODEL_ECR_REPOSITORY_NAME: pitch-prediction-model-api
   MODEL_IMAGE_TAG: model-serverless-${{ github.sha }}
   MODEL_LAMBDA_FUNCTION_NAME: pitch-sequence-serverless-model-lambda

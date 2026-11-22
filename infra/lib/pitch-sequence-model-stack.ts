@@ -17,7 +17,7 @@ export class PitchSequenceModelStack extends cdk.Stack {
     const modelTimeoutSeconds = numberFromEnv("MODEL_LAMBDA_TIMEOUT_SECONDS", 300);
     const modelReservedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_RESERVED_CONCURRENCY") ?? 1;
     const modelProvisionedConcurrency = optionalNumberFromEnv("MODEL_LAMBDA_PROVISIONED_CONCURRENCY") ?? 0;
-    const modelSnapStart = booleanFromEnv("MODEL_LAMBDA_SNAPSTART", true);
+    const modelSnapStart = booleanFromEnv("MODEL_LAMBDA_SNAPSTART", false);
     const modelSampleSize = process.env.PITCHPREDICT_SAMPLE_SIZE ?? "8";
     const modelAlgorithm = process.env.PITCHPREDICT_ALGORITHM ?? "xlstm";
 
@@ -70,12 +70,11 @@ export class PitchSequenceModelStack extends cdk.Stack {
       }
     });
 
-    if (modelSnapStart) {
-      // Container-image SnapStart launched after this CDK release, so its L2
-      // runtime metadata still rejects FROM_IMAGE. CloudFormation supports it.
-      const cfnModelFunction = modelFunction.node.defaultChild as lambda.CfnFunction;
-      cfnModelFunction.snapStart = { applyOn: "PublishedVersions" };
-    }
+    // CDK’s L2 runtime metadata rejects FROM_IMAGE, but CloudFormation accepts it.
+    const cfnModelFunction = modelFunction.node.defaultChild as lambda.CfnFunction;
+    cfnModelFunction.snapStart = {
+      applyOn: modelSnapStart ? "PublishedVersions" : "None",
+    };
 
     const liveAlias = new lambda.Alias(this, "ModelLiveAlias", {
       aliasName: modelAliasName,

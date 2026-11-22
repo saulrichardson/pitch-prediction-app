@@ -10,7 +10,7 @@ import {
   type CostControlPorts,
 } from "./cost-policy";
 
-function fixture(spend = 20, initial: CostState = { status: "armed" }) {
+function fixture(spend = 6, initial: CostState = { status: "armed" }) {
   let state = initial;
   const ports: CostControlPorts = {
     readState: vi.fn(async () => state),
@@ -27,15 +27,15 @@ function fixture(spend = 20, initial: CostState = { status: "armed" }) {
 }
 
 describe("monthly cost shutdown", () => {
-  it("reserves billing headroom inside the $30 monthly budget", () => {
-    expect(costPolicy.monthlyLimitUsd).toBe(30);
-    expect(costPolicy.monthlyShutdownUsd).toBe(20);
+  it("reserves billing headroom inside the $10 monthly budget", () => {
+    expect(costPolicy.monthlyLimitUsd).toBe(10);
+    expect(costPolicy.monthlyShutdownUsd).toBe(6);
     expect(
       costPolicy.monthlyWarningsUsd.every(
         (v) => v < costPolicy.monthlyShutdownUsd,
       ),
     ).toBe(true);
-    expect(costPolicy.dailyLimitUsd).toBe(2);
+    expect(costPolicy.dailyLimitUsd).toBe(0.75);
   });
   it("accepts only the exact app budget scope", () => {
     expect(matchesCostScope(costFilters)).toBe(true);
@@ -49,13 +49,13 @@ describe("monthly cost shutdown", () => {
     );
   });
   it("does no writes or shutdown below the limit", async () => {
-    const ports = fixture(19.999);
+    const ports = fixture(5.999);
     expect(await enforceCostLimit(ports)).toMatchObject({ shouldStop: false });
     expect(ports.saveState).not.toHaveBeenCalled();
     expect(ports.stopFunction).not.toHaveBeenCalled();
     expect(ports.notifyShutdown).not.toHaveBeenCalled();
   });
-  it("latches at exactly $20 before stopping only the app's functions and traffic", async () => {
+  it("latches at exactly $6 before stopping only the app's functions and traffic", async () => {
     const ports = fixture();
     await enforceCostLimit(ports);
     expect(
@@ -67,7 +67,7 @@ describe("monthly cost shutdown", () => {
     );
     expect(await ports.readState()).toMatchObject({
       status: "tripped",
-      actualUsd: 20,
+      actualUsd: 6,
       notifiedAt: ports.now(),
     });
   });

@@ -148,20 +148,18 @@ feature age is visible through the game date. Run the CLI with an immutable
 model version/checkpoint and retain the review JSON.
 
 The low-cost deployment keeps model reserved concurrency 1, provisioned
-concurrency 0, web reserved concurrency 10 with on-demand 2 GB execution through
-the published `live` alias, DynamoDB throughput limits, one-day
-Lambda logs, and the configured CloudFront country allowlist. Web timeout is 30
-seconds; the dedicated preparation worker runs separately. AWS budget alerts are
-paired with a latched $20 monthly app-spend shutdown within a $30 budget, filtered to
-`Project=PitchPredictionApp`. All application stacks share that active cost-allocation
-tag; unrelated account spend cannot trip the app guard. Warnings fire at $10,
-$15, a $30 month-end forecast, and $2 daily actual spend. The independent cost
-guard removes provisioned capacity, stops all three application functions, and
-disables CloudFront traffic. Billing lag and retained storage/snapshots prevent
-an exact hard billing cap. Routine releases fail closed on a tripped latch,
-missing controls, or reported spend at the limit. Model SnapStart/checkpoint packaging
-remain the existing operating model and require actual AWS verification on
-release.
+concurrency 0, web reserved concurrency 2 with on-demand 2 GB execution through
+the published `live` alias, DynamoDB throughput limits, one-day Lambda logs, and
+the configured CloudFront country allowlist. Web timeout is 30 seconds. The
+dedicated preparation worker runs separately. AWS budgets filter to
+`Project=PitchPredictionApp` and warn at $4 and $5 monthly actual spend, a $10
+month-end forecast, and $0.75 daily actual spend. At $6 reported monthly spend,
+the independent guard latches, removes provisioned capacity, stops the three
+application functions, and disables CloudFront. Routine releases fail closed
+on a tripped latch, a missing or mismatched monthly budget, or spend at the
+cutoff. New model deployments default to no SnapStart to avoid additional
+snapshot caching charges. Billing delays and retained resources can still
+cause an overrun. See the [current cost runbook](records/2026-11-21-ten-dollar-budget.md).
 
 Normal web releases use `/ready` as the Lambda adapter startup check. Each
 instance loads and validates its featured edition before accepting viewer requests.

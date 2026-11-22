@@ -13,6 +13,7 @@ import path from "node:path";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
+import { costPolicy } from "./cost-policy";
 import { webAssetsBucketName } from "./web-assets-stack";
 
 export class PitchSequenceServerlessStack extends cdk.Stack {
@@ -32,9 +33,6 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       );
     const webTimeoutSeconds = Number(
       process.env.SERVERLESS_WEB_TIMEOUT_SECONDS ?? "30",
-    );
-    const webReservedConcurrency = Number(
-      process.env.SERVERLESS_WEB_RESERVED_CONCURRENCY ?? "10",
     );
     const allowedCountries = countriesFromEnv(
       process.env.CLOUDFRONT_ALLOWED_COUNTRIES ?? "US",
@@ -107,7 +105,7 @@ export class PitchSequenceServerlessStack extends cdk.Stack {
       architecture: lambda.Architecture.X86_64,
       memorySize: webMemoryMb,
       timeout: cdk.Duration.seconds(webTimeoutSeconds),
-      reservedConcurrentExecutions: webReservedConcurrency,
+      reservedConcurrentExecutions: costPolicy.webReservedConcurrency,
       currentVersionOptions: { removalPolicy: cdk.RemovalPolicy.RETAIN },
       ephemeralStorageSize: cdk.Size.mebibytes(1024),
       logGroup: webLogGroup,

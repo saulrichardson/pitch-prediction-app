@@ -16,7 +16,7 @@ describe("prepared replay web infrastructure", () => {
     template.hasResourceProperties("AWS::Lambda::Function", {
       FunctionName: "pitch-sequence-serverless-web",
       MemorySize: 2048,
-      ReservedConcurrentExecutions: 10,
+      ReservedConcurrentExecutions: 2,
       Environment: { Variables: { AWS_LWA_READINESS_CHECK_PATH: "/ready" } },
     });
     const [aliasId, alias] = Object.entries(
@@ -314,8 +314,13 @@ describe("prepared replay web infrastructure", () => {
       UpdateReplacePolicy: "Retain",
     });
     template.hasResourceProperties("AWS::Lambda::Function", {
+      SnapStart: { ApplyOn: "None" },
       Environment: {
-        Variables: { OMP_NUM_THREADS: "1", MKL_NUM_THREADS: "1" },
+        Variables: {
+          OMP_NUM_THREADS: "1",
+          MKL_NUM_THREADS: "1",
+          PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT: "false",
+        },
       },
     });
   });

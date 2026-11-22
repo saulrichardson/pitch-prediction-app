@@ -18,7 +18,7 @@ const parameter = await ssm.send(
 const state = parseCostState(parameter.Parameter?.Value ?? "");
 if (state.status === "tripped")
   throw new Error(
-    "Deployment blocked: the monthly cost stop is latched. Follow docs/records/2026-09-13-warm-web-cost-controls.md before restoring service.",
+    "Deployment blocked: the monthly cost stop is latched. Follow docs/records/2026-11-21-ten-dollar-budget.md before restoring service.",
   );
 const { Budget: budget } = await budgets.send(
   new DescribeBudgetCommand({

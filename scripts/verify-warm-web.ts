@@ -1,6 +1,7 @@
 import {
   LambdaClient,
   GetAliasCommand,
+  GetFunctionConcurrencyCommand,
   GetFunctionUrlConfigCommand,
   GetProvisionedConcurrencyConfigCommand,
 } from "@aws-sdk/client-lambda";
@@ -8,18 +9,20 @@ import {
   CloudFrontClient,
   GetDistributionCommand,
 } from "@aws-sdk/client-cloudfront";
+import { costPolicy } from "../infra/lib/cost-policy";
 
 const FunctionName = "pitch-sequence-serverless-web";
 const Qualifier = "live";
 const lambda = new LambdaClient({});
 const distributionId = process.env.WEB_DISTRIBUTION_ID;
 if (!distributionId) throw new Error("WEB_DISTRIBUTION_ID is required.");
-const [alias, url, distribution] = await Promise.all([
+const [alias, url, distribution, concurrency] = await Promise.all([
   lambda.send(new GetAliasCommand({ FunctionName, Name: Qualifier })),
   lambda.send(new GetFunctionUrlConfigCommand({ FunctionName, Qualifier })),
   new CloudFrontClient({}).send(
     new GetDistributionCommand({ Id: distributionId }),
   ),
+  lambda.send(new GetFunctionConcurrencyCommand({ FunctionName })),
 ]);
 if (
   !alias.FunctionVersion ||
@@ -51,11 +54,18 @@ if (
 )
   throw new Error("The summary API is bypassing the published origin.");
 
+if (
+  concurrency.ReservedConcurrentExecutions !== costPolicy.webReservedConcurrency
+)
+  throw new Error(
+    `Expected web reserved concurrency of ${costPolicy.webReservedConcurrency}.`,
+  );
+
 try {
   await lambda.send(
     new GetProvisionedConcurrencyConfigCommand({ FunctionName, Qualifier }),
   );
-  throw new Error("Paid idle web capacity must be absent for the $30 budget.");
+  throw new Error("Paid idle web capacity must be absent.");
 } catch (error) {
   if (
     !(error instanceof Error) ||
@@ -64,5 +74,5 @@ try {
     throw error;
 }
 console.log(
-  `On-demand web verified: version ${alias.FunctionVersion}, no provisioned capacity, CloudFront routes through live alias with OAC.`,
+  `On-demand web verified: version ${alias.FunctionVersion}, reserved concurrency ${costPolicy.webReservedConcurrency}, no provisioned capacity, CloudFront routes through live alias with OAC.`,
 );

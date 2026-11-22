@@ -45,12 +45,12 @@ similarity/Statcast API. The general-purpose HTTP image retains the complete
 `pitchpredict` dependency graph.
 
 For deployed preparation, set `PITCHPREDICT_WARM_ON_STARTUP=true` and route
-operator invokes through a published Lambda alias. The default serverless deployment
-also enables Lambda SnapStart and sets
+operator invokes through a published Lambda alias. New serverless deployments
+default to SnapStart off to avoid a recurring snapshot charge for each version.
+When explicitly enabled, deployment sets
 `PITCHPREDICT_INITIALIZE_FOR_SNAPSHOT=true`, so model loading and the warmup
-prediction happen while the version snapshot is published rather than during a
-user request. Outside Lambda's `snap-start` initialization phase, module import
-still defers warmup to the first invocation.
+prediction happen during snapshot publication. With on-demand initialization,
+module import defers warmup to the first prediction.
 
 The Lambda image uses Runtime Interface Client 4.x for the custom-image
 SnapStart lifecycle and registers an after-restore hook that reseeds Python,
